@@ -1,0 +1,38 @@
+---
+version: '3.3'
+
+services:
+  reverseproxy:
+    image: alpine
+    command: "sleep infinity"
+    networks:
+      public:
+      private:
+
+  privatebackend:
+    image: alpine
+    command: "sleep infinity"
+    networks:
+      private:
+
+  publicservice1:
+    image: jwilder/whoami
+    ports:
+      - "8002:8000"
+    networks:
+      public:
+
+  publicservice2:
+    image: jwilder/whoami
+    networks:
+      public:
+
+networks:
+  public:
+    ipam:
+      config:
+        - subnet: "172.23.0.0/24"
+  private:
+    ipam:
+      config:
+        - subnet: "172.23.1.0/24"

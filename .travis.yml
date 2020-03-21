@@ -1,0 +1,11 @@
+language: bash
+dist: bionic
+before_install:
+  - sudo apt-get update
+  - sudo apt-get -y install aptitude
+  - sudo aptitude -y install nodejs npm shellcheck
+  - sudo npm install -g bats http-server
+install: skip
+script:
+  - shellcheck -x ./traefikjam.sh
+  - bats ./test/test.bats
