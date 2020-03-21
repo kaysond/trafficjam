@@ -7,7 +7,7 @@ function log_error () {
 }
 
 function get_network_driver () {
-	if ! DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK_NAME" 2>&1) || [ -z "$DRIVER" ]; then
+	if ! DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [ -z "$DRIVER" ]; then
 		log_error "Unexpected error while determining network driver: $DRIVER"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
@@ -15,7 +15,7 @@ function get_network_driver () {
 }
 
 function get_network_subnet () {
-	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK_NAME" 2>&1) || [ -z "$SUBNET" ]; then
+	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK" 2>&1) || [ -z "$SUBNET" ]; then
 		log_error "Unexpected error while determining network subnet: $SUBNET"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
@@ -26,7 +26,7 @@ function get_container_whitelist () {
 	WHITELIST=()
 	local ID
 	for FILTER in $WHITELIST_FILTERS; do
-		if ! ID=$(docker ps --filter "$FILTER" --filter network="$NETWORK_NAME" --format="{{.ID}}" 2>&1) || [ -z  "$ID" ]; then
+		if ! ID=$(docker ps --filter "$FILTER" --filter network="$NETWORK" --format="{{.ID}}" 2>&1) || [ -z  "$ID" ]; then
 			log_error "Unexpected error while getting container whitelist: $IMAGES"
 			ERRCOUNT=$((ERRCOUNT+1))
 			return 1
@@ -51,7 +51,7 @@ function allow_whitelist_traffic () {
 	local IP
 	local RESULT
 	for CONTID in "${WHITELIST[@]}"; do
-		if ! IP=$(docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK_NAME\").IPAddress }}" "$CONTID" 2>&1) || [ -z "$IP" ]; then
+		if ! IP=$(docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" "$CONTID" 2>&1) || [ -z "$IP" ]; then
 			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
 			ERRCOUNT=$((ERRCOUNT+1))
 			return 1

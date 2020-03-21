@@ -1,8 +1,8 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-if [[ -z "$NETWORK_NAME" ]]; then
-	echo "NETWORK_NAME is not set" >&2
+if [[ -z "$NETWORK" ]]; then
+	echo "NETWORK is not set" >&2
 	exit 1
 fi
 
