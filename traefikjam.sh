@@ -1,17 +1,26 @@
 #!/bin/bash
-set -Eeuo pipefail
+#set -Eeuo pipefail
+set -uo pipefail
 
-if [[ -z "$NETWORK" ]]; then
+if [[ -z "${NETWORK:-}" ]]; then
 	echo "NETWORK is not set" >&2
 	exit 1
 fi
 
-if [[ -z "$WHITELIST_FILTERS" ]]; then
+if [[ -z "${WHITELIST_FILTERS:-}" ]]; then
 	echo "WHITELIST_FILTERS is not set" >&2
 	exit 1
 fi
 
+#Initialize variables since we set -u
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
+ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
+DEBUG="${DEBUG:-}"
+OLD_SUBNET=""
+OLD_WHITELIST=""
+
+#CRC32 without packages
+TJINSTANCE=$(echo -n "$NETWORK ${WHITELIST_FILTERS[*]}" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
 
 . traefikjam-functions.sh
 
@@ -20,6 +29,15 @@ get_network_driver || exit 1
 if [[ "$DRIVER" == "bridge" ]]; then #not swarm
 	ERRCOUNT=0
 	while true; do
+		#Slow logging on errors
+		log_debug "Error Count: $ERRCOUNT"
+		if (( ERRCOUNT > 10 )); then
+			SLEEP_TIME=$(( POLL_INTERVAL*11 ))
+		else
+			SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
+		fi
+
+		sleep "${SLEEP_TIME}s"
 		get_network_subnet || continue
 
 		get_container_whitelist || continue
@@ -35,21 +53,12 @@ if [[ "$DRIVER" == "bridge" ]]; then #not swarm
 
 			allow_whitelist_traffic  || continue
 
-			remove_old_rules  || continue
+			remove_old_rules DOCKER-USER; remove_old_rules INPUT || continue
 
 			OLD_SUBNET="$SUBNET"
 
 			OLD_WHITELIST=("${WHITELIST[@]}")
 		fi
-
-
-		if (( ERRCOUNT > 10 )); then
-			SLEEP_TIME=$(( POLL_INTERVAL*11 ))
-		else
-			SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT-1) ))
-		fi
-
-		sleep "${SLEEP_TIME}s"
 
 		ERRCOUNT=0
 	done

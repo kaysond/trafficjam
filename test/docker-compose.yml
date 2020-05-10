@@ -1,29 +1,27 @@
----
+--- 
 version: '3.3'
 
 services:
   reverseproxy:
-    image: alpine
-    command: "sleep infinity"
+    image: traefik
     networks:
       public:
       private:
 
-  privatebackend:
-    image: alpine
-    command: "sleep infinity"
+  private1:
+    image: jwilder/whoami
     networks:
       private:
 
-  publicservice1:
+  public1:
+    image: jwilder/whoami
+    networks:
+      public:
+
+  public2:
     image: jwilder/whoami
     ports:
       - "8002:8000"
-    networks:
-      public:
-
-  publicservice2:
-    image: jwilder/whoami
     networks:
       public:
 

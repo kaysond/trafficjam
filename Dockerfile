@@ -1,8 +1,8 @@
 FROM docker
 
-RUN apk add --update --no-cache bash
+RUN apk add --no-cache bash iptables
 
 COPY traefikjam.sh /usr/local/bin/traefikjam.sh
-COPY traefikjam-functions.sh /us/local/bin/traefikjam-functions.sh
+COPY traefikjam-functions.sh /usr/local/bin/traefikjam-functions.sh
 
 ENTRYPOINT ["/usr/local/bin/traefikjam.sh"]
