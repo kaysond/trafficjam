@@ -1,7 +1,17 @@
 --- 
-version: '3.3'
+version: '3.8'
 
 services:
+  traeifkjam:
+    image: traefikjam
+    network_mode: host
+    environment:
+      POLL_INTERVAL: 1
+      NETWORK: private
+      WHITELIST_FILTERS: ancestor=traefik:latest
+    cap_add:
+      - NET_ADMIN
+
   reverseproxy:
     image: traefik
     networks:
