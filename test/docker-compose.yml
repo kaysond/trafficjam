@@ -7,7 +7,7 @@ services:
     network_mode: host
     environment:
       POLL_INTERVAL: 1
-      NETWORK: private
+      NETWORK: test_private
       WHITELIST_FILTERS: ancestor=traefik:latest
     cap_add:
       - NET_ADMIN

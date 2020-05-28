@@ -7,10 +7,9 @@ before_install:
   - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - sudo apt-get update
   - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-  - sudo apt-get -y install shellcheck curl
-  - docker-compose -f test/docker-compose.yml -p test
-  - docker build -t kaysond/traefikjam .
-  - docker run -d --name traefikjam --cap-add NET_ADMIN --network host -v "/var/run/docker.sock:/var/run/docker.sock" -e POLL_INTERVAL=5 -e NETWORK=test_public -e WHITELIST_FILTERS="ancestor=traefik:latest" kaysond/traefikjam
+  - sudo apt-get -y install shellcheck
+  - docker build -t traefikjam .
+  - docker-compose up -f test/docker-compose.yml -p test -d
 install: skip
 script:
   - shellcheck -x ./traefikjam.sh
