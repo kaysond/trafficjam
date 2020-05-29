@@ -7,10 +7,12 @@ before_install:
   - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - sudo apt-get update
   - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-  - sudo apt-get -y install shellcheck
-  - docker build -t traefikjam .
-  - docker-compose up -f test/docker-compose.yml -p test -d
-install: skip
+  - sudo apt-get -y install shellcheck curl
+  - sudo git clone https://github.com/bats-core/bats-core.git /opt/bats
+  - sudo /opt/bats/install.sh /usr/local
+install:
+  - sudo docker build -t traefikjam .
+  - sudo docker-compose -f test/docker-compose.yml -p test up -d
 script:
   - shellcheck -x ./traefikjam.sh
   - bats ./test/test.bats
