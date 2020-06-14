@@ -50,14 +50,36 @@ function get_container_whitelist () {
 	log_debug "Whitelisted containers: ${WHITELIST[*]}"
 }
 
+function add_chain () {
+	local RESULT
+	if ! iptables -t filter -L TRAEFIKJAM >& /dev/null; then
+		if ! RESULT=$(iptables -N TRAEFIKJAM); then
+			log_error "Unexpected error while adding chain TRAEFIKJAM: $RESULT"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			log "Added chain: TRAEFIKJAM"
+		fi
+	fi
+	if ! iptables -t filter -L DOCKER-USER | grep "TRAEFIKJAM" >& /dev/null; then
+		if ! RESULT=$(iptables -t filter -I DOCKER-USER -j TRAEFIKJAM); then
+			log_error "Unexpected error while adding jump rule: $RESULT"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			log "Added rule: -t filter -I DOCKER-USER -j TRAEFIKJAM"
+		fi
+	fi
+}
+
 function block_subnet_traffic () {
 	local RESULT
-	if ! RESULT=$(iptables -t filter -I DOCKER-USER -s "$SUBNET" -d "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting subnet blocking rule: $RESULT"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
 	else
-		log "Added rule: -t filter -I DOCKER-USER -s $SUBNET -d $SUBNET -j DROP"
+		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -j DROP"
 	fi
 }
 
@@ -70,19 +92,19 @@ function allow_whitelist_traffic () {
 			ERRCOUNT=$((ERRCOUNT+1))
 			return 1
 		else
-			if ! RESULT=$(iptables -t filter -I DOCKER-USER -s "$IP" -d "$SUBNET" -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+			if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
 				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 				ERRCOUNT=$((ERRCOUNT+1))
 				return 1
 			else
-				log "Added rule: -t filter -I DOCKER-USER -s $IP -d $SUBNET -j ACCEPT"
+				log "Added rule: -t filter -I TRAEFIKJAM -s $IP -d $SUBNET -j RETURN"
 			fi
-			if ! RESULT=$(iptables -t filter -I DOCKER-USER -s "$SUBNET" -d "$IP" -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+			if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
 				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 				ERRCOUNT=$((ERRCOUNT+1))
 				return 1
 			else
-				log "Added rule: -t filter -I DOCKER-USER -s $SUBNET -d $IP -j ACCEPT"
+				log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
 			fi
 		fi
 	done

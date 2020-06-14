@@ -45,6 +45,8 @@ if [[ "$DRIVER" == "bridge" ]]; then #not swarm
 		DATE=$(date "+%Y-%m-%d %H:%M:%S")
 
 		if [[ "$SUBNET" != "$OLD_SUBNET" && "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
+			add_chain || continue
+
 			block_subnet_traffic  || continue
 
 			if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
@@ -53,7 +55,7 @@ if [[ "$DRIVER" == "bridge" ]]; then #not swarm
 
 			allow_whitelist_traffic  || continue
 
-			remove_old_rules DOCKER-USER; remove_old_rules INPUT || continue
+			remove_old_rules TRAEFIKJAM; remove_old_rules INPUT || continue
 
 			OLD_SUBNET="$SUBNET"
 
@@ -66,6 +68,8 @@ elif [[ "$DRIVER" == "overlay" ]]; then #swarm
 	echo
 fi
 
+#REPLACE CURL IN BATS TESTING WITH CURL -S TO REMOVE PROGRESS OUTPUT
+
 #block traffic from docker network to local processes (i.e. published ports)
 #sudo iptables -I INPUT -s 172.23.0.0/24 -j DROP
 
@@ -74,16 +78,40 @@ fi
 # swarm (DRIVER == "overlay")
 # ---------
 
-#get container ip address:
-#docker inspect --format="{{ (index .NetworkSettings.Networks \"${NETWORK_NAME}\").IPAddress }}" "${CONTAINER_ID}"
-#NEED TO GET SERVICE VIP
+#get_subnet
 
-
-#setup:
- #ln -s /var/run/docker/netns /var/run/netns
+#container setup:
+#ln -s /var/run/docker/netns /var/run/netns
+#apk add --no-cache iproute2
 
 #get network id (for namespace):
 #NETWORK_ID=$(docker network inspect --format="{{.ID}}" "${NETWORK_NAME}")
 
 #get netns:
 #NETNS=$(ls /var/run/netns | grep -vE "^lb_" | grep "${NETWORK_ID:0:9}")
+
+#block subnet traffic on ns
+#ip netns exec "${NETNS}" iptables -t filter -A FORWARD -s "${SUBNET}" -d "${SUBNET}" -j DROP
+
+#get whitelist container ids
+
+#get whitelist service id
+#SERVICE_ID=$(docker service ls --filter "${WHITELIST}" --format="{{.ID}}") <-- needs to be looped for multiple ids
+
+#get service vip:
+#docker service inspect --format="{{ range .Endpoint.VirtualIPs }}{{ .Addr }}{{ end }}" "${SERVICE_ID}"
+
+#get load balancer ip:
+#docker network inspect "${NETWORK_ID}" --format "{{ (index .Containers \"lb-${NETWORK}\").IPv4Address  }}"
+
+#block subnet traffic on ns
+#block_swarm_subnet_traffic
+#ip netns exec 1-plg9ow19dq iptables -t filter -A FORWARD -s 10.0.1.0/24 -d 10.0.1.0/24 -j DROP
+
+#allow subnet traffic from load balancer and from whitelisted containers/services
+
+
+#figure out how to access the right namespace from within the container
+#apk add --no-cache iproute2
+
+
