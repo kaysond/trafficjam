@@ -1,12 +1,12 @@
-setup_file() {
-	docker-compose -f $(dirname "$0")/docker-compose.yml -p test up -d 
+setup_file () {
+	docker-compose -f "$BATS_TEST_DIRNAME/docker-compose.yml" -p test up -d 
 	for container in traefik public1 public2 private1; do
 		docker exec "$container" apk add --no-cache curl -s
 	done
 }
 
 teardown_file() {
-	docker-compose -f $(dirname "$0")/docker-compose.yml down
+	docker-compose -f "$BATS_TEST_DIRNAME/docker-compose.yml" down
 }
 
 @test "whoami containers are responsive" {
