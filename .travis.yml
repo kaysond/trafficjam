@@ -14,4 +14,4 @@ install:
   - sudo docker build -t traefikjam .
 script:
   - shellcheck -x ./traefikjam.sh
-  - bats ./test/test.bats
+  - /usr/local/bin/bats ./test/test.bats
