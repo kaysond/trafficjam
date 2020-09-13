@@ -12,7 +12,6 @@ before_install:
   - sudo /opt/bats/install.sh /usr/local
 install:
   - sudo docker build -t traefikjam .
-  - sudo docker-compose -f test/docker-compose.yml -p test up -d
 script:
   - shellcheck -x ./traefikjam.sh
   - bats ./test/test.bats

@@ -1,18 +1,18 @@
-function log () {
+function log() {
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1"
 }
 
-function log_error () {
+function log_error() {
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1" >&2
 }
 
-function log_debug () {
+function log_debug() {
 	if [[ -n "$DEBUG" ]]; then
 		echo "[$(date "+%Y-%m-%d %H:%M:%S")] DEBUG: $1"
 	fi
 }
 
-function get_network_driver () {
+function get_network_driver() {
 	if ! DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [ -z "$DRIVER" ]; then
 		log_error "Unexpected error while determining network driver: $DRIVER"
 		return 1
@@ -21,7 +21,7 @@ function get_network_driver () {
 	fi
 }
 
-function get_network_subnet () {
+function get_network_subnet() {
 	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK" 2>&1) || [ -z "$SUBNET" ]; then
 		log_error "Unexpected error while determining network subnet: $SUBNET"
 		ERRCOUNT=$((ERRCOUNT+1))
@@ -31,7 +31,7 @@ function get_network_subnet () {
 	fi
 }
 
-function get_container_whitelist () {
+function get_container_whitelist() {
 	WHITELIST=()
 	local ID
 	for FILTER in $WHITELIST_FILTERS; do
@@ -50,18 +50,40 @@ function get_container_whitelist () {
 	log_debug "Whitelisted containers: ${WHITELIST[*]}"
 }
 
-function block_subnet_traffic () {
+function add_chain() {
 	local RESULT
-	if ! RESULT=$(iptables -t filter -I DOCKER-USER -s "$SUBNET" -d "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! iptables -t filter -L TRAEFIKJAM >& /dev/null; then
+		if ! RESULT=$(iptables -N TRAEFIKJAM); then
+			log_error "Unexpected error while adding chain TRAEFIKJAM: $RESULT"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			log "Added chain: TRAEFIKJAM"
+		fi
+	fi
+	if ! iptables -t filter -L DOCKER-USER | grep "TRAEFIKJAM" >& /dev/null; then
+		if ! RESULT=$(iptables -t filter -I DOCKER-USER -j TRAEFIKJAM); then
+			log_error "Unexpected error while adding jump rule: $RESULT"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			log "Added rule: -t filter -I DOCKER-USER -j TRAEFIKJAM"
+		fi
+	fi
+}
+
+function block_subnet_traffic() {
+	local RESULT
+	if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting subnet blocking rule: $RESULT"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
 	else
-		log "Added rule: -t filter -I DOCKER-USER -s $SUBNET -d $SUBNET -j DROP"
+		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -j DROP"
 	fi
 }
 
-function allow_whitelist_traffic () {
+function allow_whitelist_traffic() {
 	local IP
 	local RESULT
 	for CONTID in "${WHITELIST[@]}"; do
@@ -70,25 +92,25 @@ function allow_whitelist_traffic () {
 			ERRCOUNT=$((ERRCOUNT+1))
 			return 1
 		else
-			if ! RESULT=$(iptables -t filter -I DOCKER-USER -s "$IP" -d "$SUBNET" -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+			if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
 				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 				ERRCOUNT=$((ERRCOUNT+1))
 				return 1
 			else
-				log "Added rule: -t filter -I DOCKER-USER -s $IP -d $SUBNET -j ACCEPT"
+				log "Added rule: -t filter -I TRAEFIKJAM -s $IP -d $SUBNET -j RETURN"
 			fi
-			if ! RESULT=$(iptables -t filter -I DOCKER-USER -s "$SUBNET" -d "$IP" -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+			if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
 				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 				ERRCOUNT=$((ERRCOUNT+1))
 				return 1
 			else
-				log "Added rule: -t filter -I DOCKER-USER -s $SUBNET -d $IP -j ACCEPT"
+				log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
 			fi
 		fi
 	done
 }
 
-function block_host_traffic () {
+function block_host_traffic() {
 	local RESULT
 	#Drop local socket-bound packets coming from the target subnet
 	if ! RESULT=$(iptables -t filter -I INPUT -s "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
@@ -109,7 +131,7 @@ function block_host_traffic () {
 	fi
 }
 
-function remove_old_rules () {
+function remove_old_rules() {
 	local RULENUMS
 	local RESULT
 	local RULES
