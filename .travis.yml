@@ -1,17 +1,20 @@
 language: bash
-dist: bionic
-services:
-  - docker
+dist: focal
+addons:
+  apt:
+    sources:
+      - sourceline: 'deb https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable'
+        key_url: 'https://download.docker.com/linux/debian/gpg'
+    packages:
+      - docker-ce
+      - docker-compose
+      - shellcheck
+      - curl
 before_install:
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-  - sudo apt-get update
-  - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-  - sudo apt-get -y install shellcheck curl
   - sudo git clone https://github.com/bats-core/bats-core.git /opt/bats
   - sudo /opt/bats/install.sh /usr/local
 install:
   - sudo docker build -t traefikjam .
 script:
   - shellcheck -x ./traefikjam.sh
-  - /usr/local/bin/bats ./test/test.bats
+  - sudo /usr/local/bin/bats ./test/test.bats

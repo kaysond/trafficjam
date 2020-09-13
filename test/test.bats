@@ -6,8 +6,14 @@ setup_file () {
 }
 
 teardown_file() {
-#	docker-compose -f "$BATS_TEST_DIRNAME/docker-compose.yml" down
-echo "a"
+	docker-compose -f "$BATS_TEST_DIRNAME/docker-compose.yml" down
+	$BATS_TEST_DIRNAME/clear_rules
+}
+
+@test "no traefikjam rules currently exist" {
+	iptables=$(iptables -L)
+	run bash -c "echo $iptables | grep traefikjam"
+	[ "$status" -ne  0 ]
 }
 
 @test "whoami containers are responsive" {
@@ -32,20 +38,12 @@ echo "a"
         docker exec traefik curl -s -S -m 2 private1:8000
 }
 
-@test "containers on the specified network can communicate with whitelisted containers" {
-	docker exec public1 ping traefik -c 2 -w 2
-}
-
-@test "containers (another one) on the specified network can communicate with whitelisted images" {
-        docker exec public2 ping traefik -c 2 -w 2
-}
-
 @test "containers on the specified network can not communicate with one another" {
         run docker exec public1 ping public2 -c 2 -w 2
         [ "$status" -eq 1 ]
 
         run docker exec public1 curl -s -S -m 2 public2:8000
-        [ "$status" -ne 0 ]
+        [ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with one another (opposite direction)" {
@@ -53,14 +51,14 @@ echo "a"
         [ "$status" -eq 1 ]
 
         run docker exec public2 curl -s -S -m 2 public1:8000
-        [ "$status" -ne 0 ]
+        [ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with others via host-mapped ports" {
 	curl -s -S localhost:8002
 
-	run docker exec public1 curl -s -S -m 2 public2:8002
-	[ "$status" -ne 0 ]
+	run docker exec public1 sh -c "curl -s -S -m 2 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
+	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on non-specified networks can communicate" {
