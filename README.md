@@ -1,5 +1,7 @@
 # VERY BETA
 [![Build Status](https://travis-ci.com/kaysond/traefikjam.svg?branch=master)](https://travis-ci.com/kaysond/traefikjam)
+## Dependencies
+* Docker (19.03.13)
 # Run
 ```
 docker run -d --name traefikjam --cap-add NET_ADMIN --network host \
