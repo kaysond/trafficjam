@@ -5,4 +5,3 @@ done
 for RULENUM in $(iptables --line-numbers -t filter -L INPUT | grep traefikjam | awk '{ print $1 }' | sort -nr); do
         iptables -t filter -D INPUT "$RULENUM"
 done
-

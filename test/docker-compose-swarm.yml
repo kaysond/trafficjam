@@ -13,5 +13,6 @@ services:
     privileged: true
     networks:
       - swarm
+
 networks:
   swarm:

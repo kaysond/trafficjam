@@ -1,4 +1,5 @@
 setup_file () {
+	docker build -t whoami "$BATS_TEST_DIRNAME/whoami"
 	docker-compose -f "$BATS_TEST_DIRNAME/docker-compose.yml" -p test up -d 
 	for container in traefik public1 public2 private1; do
 		docker exec "$container" apk add --no-cache curl
@@ -7,6 +8,7 @@ setup_file () {
 
 teardown_file() {
 	docker-compose -f "$BATS_TEST_DIRNAME/docker-compose.yml" down
+	docker image rm whoami
 	$BATS_TEST_DIRNAME/clear_rules
 }
 

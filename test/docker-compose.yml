@@ -23,7 +23,7 @@ services:
 
   private1:
     container_name: private1
-    image: jwilder/whoami
+    image: whoami
     ports:
       - "8000:8000"
     networks:
@@ -31,7 +31,7 @@ services:
 
   public1:
     container_name: public1
-    image: jwilder/whoami
+    image: whoami
     ports:
       - "8001:8000"
     networks:
@@ -39,7 +39,7 @@ services:
 
   public2:
     container_name: public2
-    image: jwilder/whoami
+    image: whoami
     ports:
       - "8002:8000"
     networks:
