@@ -110,24 +110,46 @@ function allow_whitelist_traffic() {
 	done
 }
 
+function add_input_chain() {
+	local RESULT
+	if ! iptables -t filter -L TRAEFIKJAM_INPUT >& /dev/null; then
+		if ! RESULT=$(iptables -N TRAEFIKJAM_INPUT); then
+			log_error "Unexpected error while adding chain TRAEFIKJAM_INPUT: $RESULT"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			log "Added chain: TRAEFIKJAM_INPUT"
+		fi
+	fi
+	if ! iptables -t filter -L INPUT | grep "TRAEFIKJAM_INPUT" >& /dev/null; then
+		if ! RESULT=$(iptables -t filter -I INPUT -j TRAEFIKJAM_INPUT); then
+			log_error "Unexpected error while adding jump rule: $RESULT"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			log "Added rule: -t filter -I INPUT -j TRAEFIKJAM_INPUT"
+		fi
+	fi
+}
+
 function block_host_traffic() {
 	local RESULT
 	#Drop local socket-bound packets coming from the target subnet
-	if ! RESULT=$(iptables -t filter -I INPUT -s "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
 	else
-		log "Added rule: -t filter -I INPUT -s $SUBNET -j DROP"
+		log "Added rule: -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -j DROP"
 	fi
 
 	#But allow them if the connection was initiated by the host
-	if ! RESULT=$(iptables -t filter -I INPUT -s "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
 	else
-		log "Added rule: -t filter -I INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+		log "Added rule: -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
 	fi
 }
 

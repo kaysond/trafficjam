@@ -1,6 +1,5 @@
 #!/bin/bash
-#set -Eeuo pipefail
-set -uo pipefail
+set -Eeuo pipefail
 
 if [[ -z "${NETWORK:-}" ]]; then
 	echo "NETWORK is not set" >&2
@@ -50,10 +49,50 @@ if [[ "$DRIVER" == "bridge" ]]; then #not swarm
 			block_subnet_traffic  || continue
 
 			if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
+				add_input_chain || continue
+
 				block_host_traffic  || continue
 			fi
 
 			allow_whitelist_traffic  || continue
+
+			remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
+
+			OLD_SUBNET="$SUBNET"
+
+			OLD_WHITELIST=("${WHITELIST[@]}")
+		fi
+
+		ERRCOUNT=0
+	done
+elif [[ "$DRIVER" == "overlay" ]]; then #swarm
+	ERRCOUNT=0
+	while true; do
+		#Slow logging on errors
+		log_debug "Error Count: $ERRCOUNT"
+		if (( ERRCOUNT > 10 )); then
+			SLEEP_TIME=$(( POLL_INTERVAL*11 ))
+		else
+			SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
+		fi
+
+		sleep "${SLEEP_TIME}s"
+		get_network_id || continue
+
+		get_service_whitelist || continue
+
+		DATE=$(date "+%Y-%m-%d %H:%M:%S")
+
+		if [[ "$SUBNET" != "$OLD_SUBNET" && "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
+			add_chain || continue
+
+			block_subnet_traffic  || continue
+
+			# if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
+			# 	block_host_traffic  || continue
+			# fi
+
+			allow_whitelist_service_traffic  || continue
 
 			remove_old_rules TRAEFIKJAM; remove_old_rules INPUT || continue
 
@@ -64,15 +103,7 @@ if [[ "$DRIVER" == "bridge" ]]; then #not swarm
 
 		ERRCOUNT=0
 	done
-elif [[ "$DRIVER" == "overlay" ]]; then #swarm
-	echo
 fi
-
-#REPLACE CURL IN BATS TESTING WITH CURL -S TO REMOVE PROGRESS OUTPUT
-
-#block traffic from docker network to local processes (i.e. published ports)
-#sudo iptables -I INPUT -s 172.23.0.0/24 -j DROP
-
 
 # ---------
 # swarm (DRIVER == "overlay")
