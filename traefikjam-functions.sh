@@ -99,15 +99,15 @@ function allow_whitelist_traffic() {
 			else
 				log "Added rule: -t filter -I TRAEFIKJAM -s $IP -d $SUBNET -j RETURN"
 			fi
-			if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
-				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
-				ERRCOUNT=$((ERRCOUNT+1))
-				return 1
-			else
-				log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
-			fi
 		fi
 	done
+	if ! RESULT=$(iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
+		ERRCOUNT=$((ERRCOUNT+1))
+		return 1
+	else
+		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
+	fi
 }
 
 function add_input_chain() {
