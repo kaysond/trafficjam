@@ -8,9 +8,10 @@ services:
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      TZ: America/Los_Angeles
       POLL_INTERVAL: 1
       NETWORK: test_public
-      WHITELIST_FILTERS: ancestor=traefik:latest
+      WHITELIST_FILTER: ancestor=traefik:latest
     cap_add:
       - NET_ADMIN
 

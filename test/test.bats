@@ -31,29 +31,33 @@ teardown_file() {
 
 	docker exec traefik curl -s -S -m 2 public1:8000
 
-        docker exec traefik ping -c 2 -w 2 public2
+	docker exec traefik ping -c 2 -w 2 public2
 
-        docker exec traefik curl -s -S -m 2 public2:8000
+	docker exec traefik curl -s -S -m 2 public2:8000
 
-        docker exec traefik ping -c 2 -w 2 private1
+	docker exec traefik ping -c 2 -w 2 private1
 
-        docker exec traefik curl -s -S -m 2 private1:8000
+	docker exec traefik curl -s -S -m 2 private1:8000
 }
 
 @test "containers on the specified network can not communicate with one another" {
-        run docker exec public1 ping public2 -c 2 -w 2
-        [ "$status" -eq 1 ]
+	run docker exec public1 ping public2 -c 2 -w 2
+	echo "$status"
+	echo "${lines[@]}"
+	[ "$status" -eq 1 ]
 
-        run docker exec public1 curl -s -S -m 2 public2:8000
-        [ "$status" -eq 7 -o "$status" -eq 28 ]
+	run docker exec public1 curl -s -S -m 2 public2:8000
+	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with one another (opposite direction)" {
-        run docker exec public2 ping public1 -c 2 -w 2
-        [ "$status" -eq 1 ]
+	run docker exec public2 ping public1 -c 2 -w 2
+	echo "$status"
+	echo "${lines[@]}"
+	[ "$status" -eq 1 ]
 
-        run docker exec public2 curl -s -S -m 2 public1:8000
-        [ "$status" -eq 7 -o "$status" -eq 28 ]
+	run docker exec public2 curl -s -S -m 2 public1:8000
+	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with others via host-mapped ports" {
