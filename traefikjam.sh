@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 if [[ -n "$TZ" ]]; then
-	cp /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+	cp /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
 fi
 
 
