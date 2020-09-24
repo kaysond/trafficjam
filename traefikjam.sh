@@ -1,109 +1,85 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+if [[ -n "$TZ" ]]; then
+	cp /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+fi
+
+
 if [[ -z "${NETWORK:-}" ]]; then
 	echo "NETWORK is not set" >&2
 	exit 1
 fi
 
-if [[ -z "${WHITELIST_FILTERS:-}" ]]; then
-	echo "WHITELIST_FILTERS is not set" >&2
+if [[ -z "${WHITELIST_FILTER:-}" ]]; then
+	echo "WHITELIST_FILTER is not set" >&2
 	exit 1
 fi
 
 #Initialize variables since we set -u
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
+SWARM_SERVICE="${SWARM_SERVICE:-}"
 DEBUG="${DEBUG:-}"
+NETNS=""
 OLD_SUBNET=""
 OLD_WHITELIST=""
 
 #CRC32 without packages
-TJINSTANCE=$(echo -n "$NETWORK ${WHITELIST_FILTERS[*]}" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
+TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER $SWARM_SERVICE" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
 
 . traefikjam-functions.sh
 
-get_network_driver || exit 1
+get_network_driver || { log_error "Could not get network driver"; exit 1; }
 
-if [[ "$DRIVER" == "bridge" ]]; then #not swarm
-	ERRCOUNT=0
-	while true; do
-		#Slow logging on errors
-		log_debug "Error Count: $ERRCOUNT"
-		if (( ERRCOUNT > 10 )); then
-			SLEEP_TIME=$(( POLL_INTERVAL*11 ))
-		else
-			SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
-		fi
-
-		sleep "${SLEEP_TIME}s"
-		get_network_subnet || continue
-
-		get_container_whitelist || continue
-
-		DATE=$(date "+%Y-%m-%d %H:%M:%S")
-
-		if [[ "$SUBNET" != "$OLD_SUBNET" && "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
-			add_chain || continue
-
-			block_subnet_traffic  || continue
-
-			if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
-				add_input_chain || continue
-
-				block_host_traffic  || continue
-			fi
-
-			allow_whitelist_traffic  || continue
-
-			remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
-
-			OLD_SUBNET="$SUBNET"
-
-			OLD_WHITELIST=("${WHITELIST[@]}")
-		fi
-
-		ERRCOUNT=0
-	done
-elif [[ "$DRIVER" == "overlay" ]]; then #swarm
-	ERRCOUNT=0
-	while true; do
-		#Slow logging on errors
-		log_debug "Error Count: $ERRCOUNT"
-		if (( ERRCOUNT > 10 )); then
-			SLEEP_TIME=$(( POLL_INTERVAL*11 ))
-		else
-			SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
-		fi
-
-		sleep "${SLEEP_TIME}s"
-		get_network_id || continue
-
-		get_service_whitelist || continue
-
-		DATE=$(date "+%Y-%m-%d %H:%M:%S")
-
-		if [[ "$SUBNET" != "$OLD_SUBNET" && "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
-			add_chain || continue
-
-			block_subnet_traffic  || continue
-
-			# if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
-			# 	block_host_traffic  || continue
-			# fi
-
-			allow_whitelist_service_traffic  || continue
-
-			remove_old_rules TRAEFIKJAM; remove_old_rules INPUT || continue
-
-			OLD_SUBNET="$SUBNET"
-
-			OLD_WHITELIST=("${WHITELIST[@]}")
-		fi
-
-		ERRCOUNT=0
-	done
+if [[ "$NETWORK_DRIVER" == "overlay" && -z "$SWARM_SERVICE" ]]; then
+	log_error "Network driver of $NETWORK is overlay, but \$SWARM_SERVICE was not set"
+	exit 1
 fi
+
+ERRCOUNT=0
+while true; do
+	#Slow logging on errors
+	log_debug "Error Count: $ERRCOUNT"
+	if (( ERRCOUNT > 10 )); then
+		SLEEP_TIME=$(( POLL_INTERVAL*11 ))
+	else
+		SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
+	fi
+
+	sleep "${SLEEP_TIME}s" &
+	wait $!
+	get_network_subnet || continue
+
+	get_whitelisted_container_ids || continue
+
+	DATE=$(date "+%Y-%m-%d %H:%M:%S")
+
+	if [[ "$SUBNET" != "$OLD_SUBNET" || "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
+		if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+			get_netns || continue
+		fi
+		add_chain || continue
+
+		block_subnet_traffic  || continue
+
+		if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
+			add_input_chain || continue
+
+			block_host_traffic  || continue
+		fi
+
+		allow_whitelist_traffic  || continue
+
+		remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
+
+		OLD_SUBNET="$SUBNET"
+
+		OLD_WHITELIST=("${WHITELIST[@]}")
+	fi
+
+	ERRCOUNT=0
+done
 
 # ---------
 # swarm (DRIVER == "overlay")
@@ -116,7 +92,7 @@ fi
 #apk add --no-cache iproute2
 
 #get network id (for namespace):
-#NETWORK_ID=$(docker network inspect --format="{{.ID}}" "${NETWORK_NAME}")
+#NETWORK_ID=$(docker network inspect --format="{{.ID}}" "${NETWORK}")
 
 #get netns:
 #NETNS=$(ls /var/run/netns | grep -vE "^lb_" | grep "${NETWORK_ID:0:9}")
@@ -128,6 +104,9 @@ fi
 
 #get whitelist service id
 #SERVICE_ID=$(docker service ls --filter "${WHITELIST}" --format="{{.ID}}") <-- needs to be looped for multiple ids
+
+#get containers matching service id
+#docker ps --filter network="$NETWORK" --filter "label=com.docker.swarm.service.id=${SERVICE_ID}" --format="{{.ID}}"
 
 #get service vip:
 #docker service inspect --format="{{ range .Endpoint.VirtualIPs }}{{ .Addr }}{{ end }}" "${SERVICE_ID}"
@@ -145,4 +124,10 @@ fi
 #figure out how to access the right namespace from within the container
 #apk add --no-cache iproute2
 
-
+#allows whitelisted service container
+# Chain FORWARD (policy ACCEPT)                                                                                                       │/ #
+# target     prot opt source               destination                                                                                │/ #
+# ACCEPT     all  --  10.0.1.0/24          10.0.1.0/24             ctstate RELATED,ESTABLISHED                                           │/ #
+# ACCEPT     all  --  10.0.1.13            10.0.1.0/24        #from whitelisted containers
+# ACCEPT		 all  --  10.0.1.4             10.0.1.0/24        #from loadbalancer                                                                      │/ #
+# DROP       all  --  10.0.1.0/24          10.0.1.0/24  
