@@ -23,6 +23,7 @@ TraefikJam is configured via several environment variables:
 * **POLL_INTERVAL** - How often TraefikJam checks Docker for changes
 * **NETWORK** - The name of the Docker network this instance of TraefikJam should manage
 * **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
+* **ALLOW_HOST_TRAFFIC** - By default TraefikJam blocks traffic from containers to the Docker host in order to block communication via mapped ports (i.e. with `-p`). The host, however, can still initiate communication with the containers. Setting this variable allows containers to initiate communication with the host, and any port-mapped containers.
 * **DEBUG** - Turns on debug logging
 
 ## Setup Examples
@@ -87,12 +88,17 @@ networks:
 ```
 
 ## Operation
-TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. Then, several rules are added to a TRAEFIKJAM chain in the filter table:
+TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. A rule is added to the end of the `DOCKER-USER` chain to jump to a `TRAEFIKJAM` chain. Then, several rules are added to a TRAEFIKJAM chain in the filter table:
 1. Accept already-established traffic whose source and destination are the network subnet - `-s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
 2. Accept traffic from whitelisted containers destined for the network subnet (this requires one rule per container) - `-s "$IP" -d "$SUBNET" -j RETURN`
 3. Drop traffic whose source and destination are the network subnet - `-s "$SUBNET" -d "$SUBNET" -j DROP`
 
-For Docker Swarm, another rule is added in the **2.** position allowing traffic from the load balancer
+For Docker Swarm, another rule is added in the **2.** position allowing traffic from the overlay network's load balancer
+
+Additionally, a jump rule is added from the `INPUT` chain to the `TRAEFIKJAM_INPUT` chain. Two rules are added here:
+1. Accept already-established traffic whose source is the network subnet - `-s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
+2. Drop traffic whose source is the network subnet - `-s "$SUBNET" -j DROP`
+
 
 ## Tested Environments
 * Ubuntu (20.04) + Docker (19.03.13)
