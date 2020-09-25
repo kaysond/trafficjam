@@ -1,4 +1,5 @@
 language: bash
+os: linux
 dist: focal
 addons:
   apt:
@@ -13,7 +14,7 @@ addons:
       - shellcheck
       - curl
 before_install:
-  - sudo git clone https://github.com/bats-core/bats-core.git /opt/bats
+  - sudo git clone --depth 1 --branch v1.2.1 https://github.com/bats-core/bats-core.git /opt/bats
   - sudo /opt/bats/install.sh /usr/local
 install:
   - sudo docker build -t traefikjam .

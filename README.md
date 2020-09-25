@@ -86,5 +86,13 @@ networks:
 
 ```
 
+## Operation
+TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. Then, several rules are added to a TRAEFIKJAM chain in the filter table:
+1. Accept already-established traffic whose source and destination are the network subnet - `-s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
+2. Accept traffic from whitelisted containers destined for the network subnet (this requires one rule per container) - `-s "$IP" -d "$SUBNET" -j RETURN`
+3. Drop traffic whose source and destination are the network subnet - `-s "$SUBNET" -d "$SUBNET" -j DROP`
+
+For Docker Swarm, another rule is added in the **2.** position allowing traffic from the load balancer
+
 ## Tested Environments
 * Ubuntu (20.04) + Docker (19.03.13)
