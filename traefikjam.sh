@@ -19,23 +19,17 @@ fi
 #Initialize variables since we set -u
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
-SWARM_SERVICE="${SWARM_SERVICE:-}"
 DEBUG="${DEBUG:-}"
 NETNS=""
 OLD_SUBNET=""
 OLD_WHITELIST=""
 
 #CRC32 without packages
-TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER $SWARM_SERVICE" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
+TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
 
 . traefikjam-functions.sh
 
 get_network_driver || { log_error "Could not get network driver"; exit 1; }
-
-if [[ "$NETWORK_DRIVER" == "overlay" && -z "$SWARM_SERVICE" ]]; then
-	log_error "Network driver of $NETWORK is overlay, but \$SWARM_SERVICE was not set"
-	exit 1
-fi
 
 ERRCOUNT=0
 while true; do
