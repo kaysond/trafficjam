@@ -1,3 +1,4 @@
+#!/bin/bash
 function log() {
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1"
 }
@@ -53,7 +54,17 @@ function get_netns() {
 	else
 		log_debug "ID of network $NETWORK is $NETWORK_ID"
 	fi
-	if ! NETNS=$(ls /var/run/netns | grep -vE "^lb_" | grep "${NETWORK_ID:0:9}") || [ -z "$NETNS" ]; then
+
+	#if ! NETNS=$(ls /var/run/netns | grep -vE "^lb_" | grep "${NETWORK_ID:0:9}") || [ -z "$NETNS" ]; then
+	#shell check complains about the above due to ls | grep poorly handling non-alphanumeric filenames
+	#this may not actaully be an issue since they're all network namespaces
+	for f in /var/run/netns/*; do
+		case $(basename "$f") in
+			lb_*) true;;
+			*"${NETWORK_ID:0:9}"*) NETNS="$(basename "$f")";;
+		esac
+	done
+	if [[ -z "$NETNS" ]]; then
 		log_error "Could not retrieve network namespace for network ID $NETWORK_ID"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
@@ -112,7 +123,7 @@ function block_subnet_traffic() {
 }
 
 function get_load_balancer_ip() {
-	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}") || [ -z "$LOADBALANCER_IP" ]; then
+	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}") || [ -z "$LOAD_BALANCER_IP" ]; then
 		log_error "Could not retrieve load balancer IP for network $NETWORK"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
