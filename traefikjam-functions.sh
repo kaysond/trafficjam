@@ -203,12 +203,12 @@ function block_host_traffic() {
 	fi
 
 	#But allow them if the connection was initiated by the host
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
 	else
-		log "Added rule: -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+		log "Added rule: -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
 	fi
 }
 
