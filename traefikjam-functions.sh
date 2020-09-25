@@ -14,7 +14,7 @@ function log_debug() {
 
 function get_network_driver() {
 	if ! NETWORK_DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [ -z "$NETWORK_DRIVER" ]; then
-		log_error "Unexpected error while determining network driver: $DRIVER"
+		log_error "Unexpected error while determining network driver: $NETWORK_DRIVER"
 		return 1
 	else
 		log_debug "Network driver of $NETWORK is $NETWORK_DRIVER"
