@@ -21,10 +21,10 @@ Potential solutions include:
 TraefikJam is configured via several environment variables:
 * **TZ** - Timezone (for logging)
 * **POLL_INTERVAL** - How often TraefikJam checks Docker for changes
-* **NETWORK** - The name of the Docker network this instance of TraefikJam should manage
+* **NETWORK** - The name of the Docker network this instance of TraefikJam should manage (multiple instances can be run for different networks)
 * **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
 * **ALLOW_HOST_TRAFFIC** - By default TraefikJam blocks traffic from containers to the Docker host in order to block communication via mapped ports (i.e. with `-p`). The host, however, can still initiate communication with the containers. Setting this variable allows containers to initiate communication with the host, and any port-mapped containers.
-* **DEBUG** - Turns on debug logging
+* **DEBUG** - Setting this variable turns on debug logging
 
 ## Setup Examples
 
@@ -55,14 +55,14 @@ services:
     environment:
       TZ: America/Los_Angeles
       POLL_INTERVAL: 5
-      NETWORK: traefik_network
-      WHITELIST_FILTER: ancestor=traefik:latest
+      NETWORK: nginx_network
+      WHITELIST_FILTER: ancestor=nginx:latest
 
-  traefik:
-    container_name: traefik
-    image: traefik:latest
+  nginx:
+    container_name: nginx
+    image: nginx:latest
     networks:
-      traefik_network:
+      nginx_network:
 
   example_service:
     container_name: whoami2
@@ -70,10 +70,10 @@ services:
     ports:
       - "8000:8000"
     networks:
-      traefik_network:
+      nginx_network:
 
 networks:
-  traefik_network:
+  nginx_network:
 ```
 
 ### Docker Swarm
@@ -88,7 +88,7 @@ networks:
 ```
 
 ## Operation
-TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. A rule is added to the end of the `DOCKER-USER` chain to jump to a `TRAEFIKJAM` chain. Then, several rules are added to a TRAEFIKJAM chain in the filter table:
+TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. A rule is added to the end of the `DOCKER-USER` chain to jump to a `TRAEFIKJAM` chain. Then, several rules are added to a `TRAEFIKJAM`  chain in the filter table:
 1. Accept already-established traffic whose source and destination are the network subnet - `-s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
 2. Accept traffic from whitelisted containers destined for the network subnet (this requires one rule per container) - `-s "$IP" -d "$SUBNET" -j RETURN`
 3. Drop traffic whose source and destination are the network subnet - `-s "$SUBNET" -d "$SUBNET" -j DROP`
