@@ -74,7 +74,7 @@ function get_netns() {
 }
 
 function get_load_balancer_ip() {
-	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }} | awk -F/ '{ print $1 }'") || [ -z "$LOAD_BALANCER_IP" ]; then
+	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || [ -z "$LOAD_BALANCER_IP" ]; then
 		log_error "Could not retrieve load balancer IP for network $NETWORK"
 		ERRCOUNT=$((ERRCOUNT+1))
 		return 1
