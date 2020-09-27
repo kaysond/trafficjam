@@ -218,12 +218,12 @@ function remove_old_rules() {
 	local RULES
 
 	if ! RULES=$(iptables_tj --line-numbers -t filter -L "$1" 2>&1); then
-		log_error "Could not get old $1 rules for removal: $RULES"
+		log_error "Could not get rules from chain '$1' for removal: $RULES"
 		return 1
 	fi
 	#Make sure to reverse sort rule numbers othwerise the numbers change!
 	if ! RULENUMS=$(echo "$RULES" | grep "traefikjam-$TJINSTANCE" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
-		log "No old rules to remove"
+		log "No old rules to remove from chain '$1'"
 	else
 		for RULENUM in $RULENUMS; do
 			RULE=$(iptables_tj -t filter -L "$1" "$RULENUM")
