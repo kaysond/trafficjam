@@ -1,11 +1,6 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-if [[ -n "$TZ" ]]; then
-	cp /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
-fi
-
-
 if [[ -z "${NETWORK:-}" ]]; then
 	echo "NETWORK is not set" >&2
 	exit 1
@@ -20,9 +15,14 @@ fi
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
 DEBUG="${DEBUG:-}"
+TZ="${TZ:-}"
 NETNS=""
 OLD_SUBNET=""
 OLD_WHITELIST=""
+
+if [[ -n "$TZ" ]]; then
+	cp /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+fi
 
 #CRC32 without packages
 TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
