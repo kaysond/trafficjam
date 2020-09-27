@@ -68,7 +68,7 @@ while true; do
 			allow_load_balancer_traffic || continue
 		fi
 
-		allow_whitelist_traffic  || continue
+		allow_whitelist_traffic || continue
 
 		remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
 

@@ -132,43 +132,6 @@ function block_subnet_traffic() {
 	fi
 }
 
-function allow_load_balancer_traffic() {
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
-		log_error "Unexpected error while setting load balancer allow rule: $RESULT"
-		ERRCOUNT=$((ERRCOUNT+1))
-		return 1
-	else
-		log "Added rule: -t filter -I TRAEFIKJAM -s $LOAD_BALANCER_IP -d $SUBNET -j RETURN"
-	fi
-}
-
-function allow_whitelist_traffic() {
-	local IP
-	local RESULT
-	for CONTID in "${WHITELIST[@]}"; do
-		if ! IP=$(docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" "$CONTID" 2>&1) || [ -z "$IP" ]; then
-			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
-			ERRCOUNT=$((ERRCOUNT+1))
-			return 1
-		else
-			if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
-				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
-				ERRCOUNT=$((ERRCOUNT+1))
-				return 1
-			else
-				log "Added rule: -t filter -I TRAEFIKJAM -s $IP -d $SUBNET -j RETURN"
-			fi
-		fi
-	done
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
-		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
-		ERRCOUNT=$((ERRCOUNT+1))
-		return 1
-	else
-		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
-	fi
-}
-
 function add_input_chain() {
 	local RESULT
 	if ! iptables_tj -t filter -L TRAEFIKJAM_INPUT >& /dev/null; then
@@ -212,6 +175,43 @@ function block_host_traffic() {
 	fi
 }
 
+function allow_load_balancer_traffic() {
+	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+		log_error "Unexpected error while setting load balancer allow rule: $RESULT"
+		ERRCOUNT=$((ERRCOUNT+1))
+		return 1
+	else
+		log "Added rule: -t filter -I TRAEFIKJAM -s $LOAD_BALANCER_IP -d $SUBNET -j RETURN"
+	fi
+}
+
+function allow_whitelist_traffic() {
+	local IP
+	local RESULT
+	for CONTID in "${WHITELIST[@]}"; do
+		if ! IP=$(docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" "$CONTID" 2>&1) || [ -z "$IP" ]; then
+			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
+			ERRCOUNT=$((ERRCOUNT+1))
+			return 1
+		else
+			if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
+				ERRCOUNT=$((ERRCOUNT+1))
+				return 1
+			else
+				log "Added rule: -t filter -I TRAEFIKJAM -s $IP -d $SUBNET -j RETURN"
+			fi
+		fi
+	done
+	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
+		ERRCOUNT=$((ERRCOUNT+1))
+		return 1
+	else
+		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
+	fi
+}
+
 function remove_old_rules() {
 	local RULENUMS
 	local RESULT
@@ -222,13 +222,16 @@ function remove_old_rules() {
 		return 1
 	fi
 	#Make sure to reverse sort rule numbers othwerise the numbers change!
-	RULENUMS=$(echo "$RULES" | grep "traefikjam-$TJINSTANCE" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr)
-	for RULENUM in $RULENUMS; do
-		RULE=$(iptables_tj -t filter -L "$1" "$RULENUM")
-		if ! RESULT=$(iptables_tj -t filter -D "$1" "$RULENUM"); then
-			log_error "Could not remove $1 rule: $RULE"
-		else
-			log "Removed $1 rule: $RULE"
-		fi
-	done
+	if ! RULENUMS=$(echo "$RULES" | grep "traefikjam-$TJINSTANCE" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
+		log "No old rules to remove"
+	else
+		for RULENUM in $RULENUMS; do
+			RULE=$(iptables_tj -t filter -L "$1" "$RULENUM")
+			if ! RESULT=$(iptables_tj -t filter -D "$1" "$RULENUM"); then
+				log_error "Could not remove $1 rule: $RULE"
+			else
+				log "Removed $1 rule: $RULE"
+			fi
+		done
+	fi
 }
