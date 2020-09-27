@@ -64,11 +64,11 @@ while true; do
 			block_host_traffic  || continue
 		fi
 
-		allow_whitelist_traffic  || continue
-
 		if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 			allow_load_balancer_traffic || continue
 		fi
+
+		allow_whitelist_traffic  || continue
 
 		remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
 

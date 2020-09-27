@@ -73,6 +73,16 @@ function get_netns() {
 	fi
 }
 
+function get_load_balancer_ip() {
+	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }} | awk -F/ '{ print $1 }'") || [ -z "$LOAD_BALANCER_IP" ]; then
+		log_error "Could not retrieve load balancer IP for network $NETWORK"
+		ERRCOUNT=$((ERRCOUNT+1))
+		return 1
+	else
+		log_debug "Load balancer IP of $NETWORK is $LOAD_BALANCER_IP"
+	fi
+}
+
 function iptables_tj() {
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 		ip netns exec "$NETNS" iptables "$@"
@@ -119,16 +129,6 @@ function block_subnet_traffic() {
 		return 1
 	else
 		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -j DROP"
-	fi
-}
-
-function get_load_balancer_ip() {
-	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}") || [ -z "$LOAD_BALANCER_IP" ]; then
-		log_error "Could not retrieve load balancer IP for network $NETWORK"
-		ERRCOUNT=$((ERRCOUNT+1))
-		return 1
-	else
-		log_debug "Load balancer IP of $NETWORK is $LOAD_BALANCER_IP"
 	fi
 }
 
