@@ -52,6 +52,7 @@ while true; do
 	if [[ "$SUBNET" != "$OLD_SUBNET" || "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
 		if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 			get_netns || continue
+			get_load_balancer_ip || continue
 		fi
 		add_chain || continue
 
@@ -64,6 +65,10 @@ while true; do
 		fi
 
 		allow_whitelist_traffic  || continue
+
+		if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+			allow_load_balancer_traffic || continue
+		fi
 
 		remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
 

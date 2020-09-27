@@ -4,7 +4,7 @@ function log() {
 }
 
 function log_error() {
-	echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1" >&2
+	echo "[$(date "+%Y-%m-%d %H:%M:%S")] ERROR: $1" >&2
 }
 
 function log_debug() {
