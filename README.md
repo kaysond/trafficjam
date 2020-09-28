@@ -77,15 +77,7 @@ networks:
 ```
 
 ### Docker Swarm
-`docker-cli`:
-```
-
-```
-
-`docker-compose.yml`:
-```
-
-```
+TraefikJam does not yet work on Swarm due to a lack of `cap_add` support on services. Fortunately this will be introduced in the next Docker release: https://github.com/docker/cli/pull/2687
 
 ## Operation
 TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. A rule is added to the end of the `DOCKER-USER` chain to jump to a `TRAEFIKJAM` chain. Then, several rules are added to a `TRAEFIKJAM`  chain in the filter table:
