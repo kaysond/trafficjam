@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+  workflow_dispatch:
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Install bats
+        run: |
+          sudo git clone --depth 1 --branch v1.2.1 https://github.com/bats-core/bats-core.git /opt/bats
+          sudo /opt/bats/install.sh /usr/local
+
+      # Runs a set of commands using the runners shell
+      - name: Run shellcheck
+        run: |
+          shellcheck $GITHUB_WORKSPACE/traefikjam-functions.sh
+          shellcheck -x $GITHUB_WORKSPACE/traefikjam.sh
+          
+      - name: Build the image
+        run: docker build -t traefikjam $GITHUB_WORKSPACE
+      
+      - name: Run bats
+        run: sudo /usr/local/bin/bats $GITHUB_WORKSPACE/test/test.bats
