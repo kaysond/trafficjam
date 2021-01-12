@@ -1,14 +1,14 @@
-version: '3.3'
+version: '3.7'
 services:
   swarm-manager:
-    image: docker:dind
+    image: traefikjam_swarm_test
     container_name: swarm-manager
     privileged: true
     networks:
       - swarm
 
   swarm-worker:
-    image: docker:dind
+    image: traefikjam_swarm_test
     container_name: swarm-worker
     privileged: true
     networks:

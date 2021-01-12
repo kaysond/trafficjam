@@ -1,4 +1,4 @@
-# TraefikJam (ALPHA) [![Build Status](https://travis-ci.com/kaysond/traefikjam.svg?branch=master)](https://travis-ci.com/kaysond/traefikjam)
+# TraefikJam (ALPHA) [![CI](https://github.com/kaysond/traefikjam/workflows/CI/badge.svg?branch=master)](https://github.com/kaysond/traefikjam/actions?query=workflow:CI)
 A Docker firewall for your reverse proxy network
 
 ## Threat Model

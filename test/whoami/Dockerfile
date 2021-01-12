@@ -8,4 +8,5 @@ WORKDIR /app
 ENV PORT 8000
 EXPOSE 8000
 COPY --from=binary /app/http /app
+RUN apk add --no-cache curl
 CMD ["/app/http"]
