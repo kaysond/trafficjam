@@ -1,58 +1,6 @@
 version: '3.7'
-
 services:
-  traefikjam:
-    container_name: traefikjam
-    image: traefikjam
-    network_mode: host
-    volumes:
-     - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      TZ: America/Los_Angeles
-      POLL_INTERVAL: 1
-      NETWORK: test_public
-      WHITELIST_FILTER: ancestor=traefik:v2.3.7
-      DEBUG: "true"
-    cap_add:
-      - NET_ADMIN
-
-  reverseproxy:
-    container_name: traefik
-    image: traefik:v2.3.7
-    networks:
-      public:
-      private:
-
-  private1:
-    container_name: private1
-    image: whoami
-    ports:
-      - "8000:8000"
-    networks:
-      private:
-
-  public1:
-    container_name: public1
-    image: whoami
-    ports:
-      - "8001:8000"
-    networks:
-      public:
-
-  public2:
-    container_name: public2
-    image: whoami
-    ports:
-      - "8002:8000"
-    networks:
-      public:
-
-networks:
-  public:
-    ipam:
-      config:
-        - subnet: "172.23.0.0/24"
-  private:
-    ipam:
-      config:
-        - subnet: "172.23.1.0/24"
+  traefikjam_test:
+    image: traefikjam_test
+    container_name: traefikjam_test
+    privileged: true

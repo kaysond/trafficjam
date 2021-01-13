@@ -8,25 +8,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_and_test:
+  test:
     runs-on: ubuntu-20.04
     steps:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Install bats
-        run: |
-          sudo git clone --depth 1 --branch v1.2.1 https://github.com/bats-core/bats-core.git /opt/bats
-          sudo /opt/bats/install.sh /usr/local
-
-      # Runs a set of commands using the runners shell
       - name: Run shellcheck
         run: |
           shellcheck $GITHUB_WORKSPACE/traefikjam-functions.sh
           shellcheck -x $GITHUB_WORKSPACE/traefikjam.sh
           
-      - name: Build the image
-        run: docker build -t traefikjam $GITHUB_WORKSPACE
+      - name: Build the test image
+        run: docker build --tag traefikjam_test --file $GITHUB_WORKSPACE/test/containers/traefikjam_test/Dockerfile  $GITHUB_WORKSPACE
       
-      - name: Run bats
-        run: sudo /usr/local/bin/bats $GITHUB_WORKSPACE/test/test.bats
+      - name: Deploy the non-swarm environment
+        run: docker-compose -f $GITHUB_WORKSPACE/test/docker-compose.yml up -d
+
+      - name: Test the non-swarm environment
+        run: |
+          docker exec traefikjam_test bats /opt/traefikjam/test/test-dind.bats
+          docker-compose -f $GITHUB_WORKSPACE/test/docker-compose.yml down
