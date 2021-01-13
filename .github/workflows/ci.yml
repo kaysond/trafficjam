@@ -35,7 +35,7 @@ jobs:
           docker-compose -f ./test/docker-compose-swarm.yml up -d
           docker exec swarm-manager docker swarm init
           docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
-          docker exec swarm-manager docker stack deploy -c /opt/traefikjam/test/swarm/docker-compose-dind.yml test
+          docker exec swarm-manager docker stack deploy -c /opt/traefikjam/test/docker-compose-dind-swarm.yml test
 
       - name: Test the swarm environment
         run: |
