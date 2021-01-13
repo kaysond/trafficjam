@@ -16,46 +16,46 @@ setup_file () {
 }
 
 @test "whitelisted containers can communicate with all other containers" {
-	docker exec traefik ping -c 2 -w 2 public1
+	docker exec traefik ping -c 2 -w 10 public1
 
-	docker exec traefik curl -s -S -m 2 public1:8000
+	docker exec traefik curl -s -S -m 10 public1:8000
 
-	docker exec traefik ping -c 2 -w 2 public2
+	docker exec traefik ping -c 2 -w 10 public2
 
-	docker exec traefik curl -s -S -m 2 public2:8000
+	docker exec traefik curl -s -S -m 10 public2:8000
 
-	docker exec traefik ping -c 2 -w 2 private1
+	docker exec traefik ping -c 2 -w 10 private1
 
-	docker exec traefik curl -s -S -m 2 private1:8000
+	docker exec traefik curl -s -S -m 10 private1:8000
 }
 
 @test "containers on the specified network can not communicate with one another" {
-	run docker exec public1 ping public2 -c 2 -w 2
+	run docker exec public1 ping -c 2 -w 5 public2
 	echo "$status"
 	echo "${lines[@]}"
 	[ "$status" -eq 1 ]
 
-	run docker exec public1 curl -s -S -m 2 public2:8000
+	run docker exec public1 curl -s -S -m 5 public2:8000
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with one another (opposite direction)" {
-	run docker exec public2 ping public1 -c 2 -w 2
+	run docker exec public2 ping -c 2 -w 5 public1
 	echo "$status"
 	echo "${lines[@]}"
 	[ "$status" -eq 1 ]
 
-	run docker exec public2 curl -s -S -m 2 public1:8000
+	run docker exec public2 curl -s -S -m 5 public1:8000
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with others via host-mapped ports" {
 	curl -s -S localhost:8002
 
-	run docker exec public1 sh -c "curl -s -S -m 2 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
+	run docker exec public1 sh -c "curl -s -S -m 5 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on non-specified networks can communicate" {
-	docker exec private1 ping traefik -c 2 -w 2
+	docker exec private1 ping -c 2 -w 5 traefik
 }
