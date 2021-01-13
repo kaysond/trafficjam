@@ -55,7 +55,7 @@ jobs:
           push: true
           tags: ${{ steps.prep.outputs.tags }}
           cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
