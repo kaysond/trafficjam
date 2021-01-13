@@ -1,14 +1,14 @@
 version: '3.7'
 services:
   swarm-manager:
-    image: traefikjam_swarm_test
+    image: traefikjam_test
     container_name: swarm-manager
     privileged: true
     networks:
       - swarm
 
   swarm-worker:
-    image: traefikjam_swarm_test
+    image: traefikjam_test
     container_name: swarm-worker
     privileged: true
     networks:
