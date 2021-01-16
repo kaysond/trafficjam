@@ -1,24 +1,26 @@
-version: '3.7'
+version: '3.8'
 
 services:
   traefikjam:
     image: traefikjam
-    network_mode: host
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       TZ: America/Los_Angeles
       POLL_INTERVAL: 1
       NETWORK: test_public
-      WHITELIST_FILTER: ancestor=traefik:v2.3.7
+      WHITELIST_FILTER: ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
       DEBUG: "true"
     cap_add:
       - NET_ADMIN
+    networks:
+      host_netns:
     deploy:
       mode: global
 
   reverseproxy:
-    image: traefik:v2.3.7
+    hostname: "{{ .Service.Name }}.{{ .Task.Slot }}"
+    image: traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
     networks:
       public:
       private:
@@ -26,6 +28,7 @@ services:
       mode: global
 
   private1:
+    hostname: "{{ .Service.Name }}.{{ .Task.Slot }}"
     image: whoami
     ports:
       - "8000:8000"
@@ -35,6 +38,7 @@ services:
       replicas: 2
 
   public1:
+    hostname: "{{ .Service.Name }}.{{ .Task.Slot }}"
     image: whoami
     ports:
       - "8001:8000"
@@ -44,6 +48,7 @@ services:
       replicas: 2
 
   public2:
+    hostname: "{{ .Service.Name }}.{{ .Task.Slot }}"
     image: whoami
     ports:
       - "8002:8000"
@@ -61,3 +66,6 @@ networks:
     ipam:
       config:
         - subnet: "172.23.1.0/24"
+  host_netns:
+    external:
+      name: "host"

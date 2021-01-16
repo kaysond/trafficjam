@@ -3,8 +3,9 @@ A Docker firewall for your reverse proxy network
 
 | Master | Develop |
 | ------------ | ------------ |
-|[![CI](https://github.com/kaysond/traefikjam/workflows/CI/badge.svg?branch=master)](https://github.com/kaysond/traefikjam/actions?query=workflow%3ACI+branch%3Amaster)|[![CI](https://github.com/kaysond/traefikjam/workflows/CI/badge.svg?branch=develop)](https://github.com/kaysond/traefikjam/actions?query=workflow%3ACI+branch%3Adevelop)|
 |[![Release](https://github.com/kaysond/traefikjam/workflows/Release/badge.svg)](https://github.com/kaysond/traefikjam/actions?query=workflow%3ARelease)|[![Build](https://github.com/kaysond/traefikjam/workflows/Build/badge.svg)](https://github.com/kaysond/traefikjam/actions?query=workflow%3ABuild)|
+|[![CI](https://github.com/kaysond/traefikjam/workflows/CI/badge.svg?branch=master)](https://github.com/kaysond/traefikjam/actions?query=workflow%3ACI+branch%3Amaster)|[![CI](https://github.com/kaysond/traefikjam/workflows/CI/badge.svg?branch=develop)](https://github.com/kaysond/traefikjam/actions?query=workflow%3ACI+branch%3Adevelop)|
+
 
 ## Threat Model
 **Why do you need something like TraefikJam?** Reverse proxies are often used to authenticate external access to internal services, providing benefits such as centralized user management, access control, 2FA and SSO. In a typical Docker setup, multiple services are connected to the reverse proxy via a single network. If a user authenticates to one service and is able to compromise that service (such as by using [this Pi-Hole vulnerability](http://https://natedotred.wordpress.com/2020/03/28/cve-2020-8816-pi-hole-remote-code-execution/ "this Pi-Hole vulnerability")), that user will gain access to the entire network *behind* the reverse proxy, and can access every service on the network whether they would normally have permission or not.
@@ -20,7 +21,7 @@ Potential solutions include:
 * Use a reverse proxy with auto-discovery and a firewall to isolate services
   * Enables 2FA, LDAP, ACL, SSO, etc. regardless of service support :)
   * Routes are automatically discovered by the proxy without manual configuration :)
-  * Every service only needs connection to one network :)
+  * Every service only needs a connection to one network :)
 
 ## Configuration
 TraefikJam is configured via several environment variables:
@@ -47,7 +48,7 @@ docker run -d --name traefikjam --cap-add NET_ADMIN --network host \
 
 `docker-compose.yml`:
 ```
-version: "3.3"
+version: '3.8'
 services:
   traefikjam:
     container_name: traefikjam
@@ -82,7 +83,37 @@ networks:
 ```
 
 ### Docker Swarm
-TraefikJam does not yet work on Swarm due to a lack of `cap_add` support on services. Fortunately this will be introduced in the next Docker release: https://github.com/docker/cli/pull/2687
+`docker-cli`:
+```
+docker service create --name traefikjam --cap-add NET_ADMIN --network host --mode global \
+  -v "/var/run/docker.sock:/var/run/docker.sock" \
+  -e TZ=America/Los_Angeles \
+  -e POLL_INTERVAL=5 \
+  -e NETWORK=traefik_network \
+  -e WHITELIST_FILTER="ancestor=traefik:2.3.7" \
+  kaysond/traefikjam
+```
+
+`docker-compose.yml`:
+```
+version: '3.8'
+
+services:
+  traefikjam:
+    image: kaysond/traefikjam
+    network_mode: host
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TZ: America/Los_Angeles
+      POLL_INTERVAL: 5
+      NETWORK: traefik_network
+      WHITELIST_FILTER: ancestor=traefik:v2.3.7
+    cap_add:
+      - NET_ADMIN
+    deploy:
+      mode: global
+```
 
 ## Operation
 TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. A rule is added to the end of the `DOCKER-USER` chain to jump to a `TRAEFIKJAM` chain. Then, several rules are added to a `TRAEFIKJAM`  chain in the filter table:
@@ -96,6 +127,6 @@ Additionally, a jump rule is added from the `INPUT` chain to the `TRAEFIKJAM_INP
 1. Accept already-established traffic whose source is the network subnet - `-s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
 2. Drop traffic whose source is the network subnet - `-s "$SUBNET" -j DROP`
 
-
-## Tested Environments
-* Ubuntu (20.04) + Docker (19.03.13)
+## Dependencies
+* Linux with iptables
+* Docker >20.10.0

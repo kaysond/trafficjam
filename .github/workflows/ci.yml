@@ -36,6 +36,7 @@ jobs:
           docker exec swarm-manager docker swarm init
           docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
           docker exec swarm-manager docker stack deploy -c /opt/traefikjam/test/docker-compose-dind-swarm.yml test
+        shell: bash
 
       - name: Test the swarm environment
         run: |
