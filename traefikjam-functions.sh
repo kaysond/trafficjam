@@ -20,13 +20,6 @@ function get_network_driver() {
 		return 1
 	else
 		log_debug "Network driver of $NETWORK is $NETWORK_DRIVER"
-		# if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		# 	local RESULT
-		# 	if ! RESULT=$(ln -s /var/run/docker/netns /var/run/netns 2>&1); then
-		# 		log_error "Unexpected error while linking docker netns: $RESULT"
-		# 		return 1
-		# 	fi
-		# fi
 	fi
 }
 
@@ -65,7 +58,7 @@ function get_netns() {
 	for f in /var/run/netns/*; do
 		case $(basename "$f") in
 			lb_*) true;;
-			*"${NETWORK_ID:0:9}"*) NETNS="$(basename "$f")";;
+			*"${NETWORK_ID:0:9}"*) NETNS="$f";;
 		esac
 	done
 	if [[ -z "$NETNS" ]]; then
@@ -87,7 +80,7 @@ function get_load_balancer_ip() {
 
 function iptables_tj() {
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		ip netns exec "$NETNS" iptables "$@"
+		nsenter -n"$NETNS" -- iptables "$@"
 	else
 		iptables "$@"
 	fi

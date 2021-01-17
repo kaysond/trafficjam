@@ -1,4 +1,4 @@
-version: '3.7'
+version: '3.8'
 
 services:
   traefikjam:
@@ -15,6 +15,7 @@ services:
       DEBUG: "true"
     cap_add:
       - NET_ADMIN
+      - SYS_ADMIN
 
   reverseproxy:
     container_name: traefik
