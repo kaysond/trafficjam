@@ -14,33 +14,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Run shellcheck
+      - name: Install bats
         run: |
-          shellcheck ./traefikjam-functions.sh
-          shellcheck -x ./traefikjam.sh
+          sudo git clone --depth 1 --branch v1.2.1 https://github.com/bats-core/bats-core.git /opt/bats
+          sudo /opt/bats/install.sh /usr/local
           
-      - name: Build the test image
-        run: docker build --tag traefikjam_test --file ./test/containers/traefikjam_test/Dockerfile  .
-      
-      - name: Deploy the non-swarm environment
-        run: docker-compose -f ./test/docker-compose.yml up -d
-
-      - name: Test the non-swarm environment
-        run: |
-          docker exec traefikjam_test bats /opt/traefikjam/test/test-dind.bats
-          docker-compose -f ./test/docker-compose.yml down
-
-      - name: Deploy the swarm environment
-        run: |
-          docker-compose -f ./test/docker-compose-swarm.yml up -d
-          docker exec swarm-manager docker swarm init
-          docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
-          docker exec swarm-manager docker stack deploy -c /opt/traefikjam/test/docker-compose-dind-swarm.yml test
-        shell: bash
-
-      - name: Test the swarm environment
-        run: |
-          #docker exec swarm-manager bats /opt/traefikjam/test/test-dind-swarm.bats
-          #docker exec swarm-worker bats /opt/traefikjam/test/test-dind-swarm.bats
-          docker-compose -f ./test/docker-compose-swarm.yml down
-          
+      - name: Run test suite
+        run: bats test/test.bats

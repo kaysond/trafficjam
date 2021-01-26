@@ -1,4 +1,17 @@
 #!/bin/bash
+function tj_sleep() {
+	#Slow logging on errors
+	log_debug "Error Count: $ERRCOUNT"
+	if (( ERRCOUNT > 10 )); then
+		SLEEP_TIME=$(( POLL_INTERVAL*11 ))
+	else
+		SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
+	fi
+
+	sleep "${SLEEP_TIME}s" &
+	wait $!
+}
+
 function log() {
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1"
 }
@@ -11,6 +24,101 @@ function log_error() {
 function log_debug() {
 	if [[ -n "$DEBUG" ]]; then
 		echo "[$(date "+%Y-%m-%d %H:%M:%S")] DEBUG: $1"
+	fi
+}
+
+function remove_service() {
+	local ID
+	if ID=$(docker service ls --quiet --filter "label=traefikjam.id=$TJINSTANCE") && [ -n "$ID" ]; then
+		local RESULT
+		if ! RESULT=$(docker rm "$ID" 2>&1); then
+			log_error "Unexpected error while removing existing service: $RESULT"
+		else
+			log "Removed service $ID: $RESULT"
+		fi
+	else
+		log_debug "No existing service found on startup"
+	fi
+}
+
+function deploy_service() {
+	if ! docker inspect "$(docker service ls --quiet --filter "label=traefikjam.id=$TJINSTANCE")" &> /dev/null; then
+		if ! SERVICE_ID=$(docker service create \
+				--quiet \
+				--detach \
+				--name "traefikjam_$TJINSTANCE" \
+				--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
+				--mount type=bind,source=/var/run/docker/netns,destination=/var/run/netns \
+				--env TZ="$TZ" \
+				--env POLL_INTERVAL="$POLL_INTERVAL" \
+				--env NETWORK="$NETWORK" \
+				--env WHITELIST_FILTER="$WHITELIST_FILTER" \
+				--env DEBUG="$DEBUG" \
+				--cap-add NET_ADMIN \
+				--cap-add SYS_ADMIN \
+				--mode global \
+				--restart-condition on-failure \
+				--network host \
+				--label traefikjam.id="$TJINSTANCE" \
+				"$SWARM_IMAGE" 2>&1
+			); then
+			log_error "Unexpected error while deploying service: $SERVICE_ID"
+			return 1
+		else
+			#docker service create may print warnings to stderr even if it succeeds
+			#particularly due to the traefikjam image not being accessible in a registry during CI
+			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1) 
+			log "Created service traefikjam_$TJINSTANCE: $SERVICE_ID"
+		fi
+	else
+		log_debug "Existing service found, not deploying"
+	fi
+}
+
+function get_load_balancer_ips() {
+	local RESULT
+	if ! RESULT=$(docker service inspect --format '{{ if .UpdateStatus }}{{ .UpdateStatus.State }}{{ end }}' "$SERVICE_ID" 2>&1); then
+		log_error "Unexpected error while getting service update state: $RESULT"
+		return 1
+	elif [[ "$RESULT" != "updating" ]]; then
+		#Filter out any service container that is not running
+		local CONT_IDS
+		if ! CONT_IDS=$(docker service ps --quiet --filter desired-state=running "$SERVICE_ID" | cut -c -12 2>&1); then
+			log_error "Unexpected error while determining service container IDs: $CONT_IDS"
+			return 1
+		fi
+		local SERVICE_LOGS
+		if ! SERVICE_LOGS=$(docker service logs "$SERVICE_ID" 2>&1); then
+			log_error "Unexpected error while retrieving service logs: $SERVICE_LOGS"
+			return 1
+		fi
+		#This mess searches the service logs for running containers' "lbip:" output
+		#and saves the most recent output from each container into the variable
+		if ! LOAD_BALANCER_IPS=$({ printf '%s' "$SERVICE_LOGS" | \
+				grep -E "$(printf '(%s)' "$CONT_IDS" | tr '\n' '|')" | \
+				grep "lbip:" | \
+				awk '{ print $1" "$(NF) }' | \
+				tac | \
+				awk '!a[$1]++ { print $2 }' | \
+				sed 's/lbip://' | \
+				sort -d | \
+				tr '\n' ' '; } 2>&1); then
+			log_debug "No load balancer ips found"
+			LOAD_BALANCER_IPS="$OLD_LOAD_BALANCER_IPS"
+		else
+			log_debug "Load balancer IPs: $LOAD_BALANCER_IPS"
+		fi
+	else
+		log_debug "Skipping load balancer ip check because service is still updating"
+	fi
+}
+
+function update_service() {
+	local RESULT
+	if ! RESULT=$(docker service update --detach --env-add "LOAD_BALANCER_IPS=$LOAD_BALANCER_IPS" "$SERVICE_ID" 2>&1); then
+		log_error "Unexpected error while updating service: $RESULT"
+	else
+		log "Updated service $SERVICE_ID"
 	fi
 }
 
@@ -41,7 +149,7 @@ function get_whitelisted_container_ids() {
 		log_error "Retrieved empty ID for whitelisted containers"
 		return 1
 	fi
-	log_debug "Whitelisted containers: ${WHITELIST[*]}"
+	log_debug "Whitelisted containers: $WHITELIST"
 }
 
 function get_netns() {
@@ -69,18 +177,22 @@ function get_netns() {
 	fi
 }
 
-function get_load_balancer_ip() {
-	if ! LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || [ -z "$LOAD_BALANCER_IP" ]; then
+function get_local_load_balancer_ip() {
+	if ! LOCAL_LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || [ -z "$LOCAL_LOAD_BALANCER_IP" ]; then
 		log_error "Could not retrieve load balancer IP for network $NETWORK"
 		return 1
 	else
-		log_debug "Load balancer IP of $NETWORK is $LOAD_BALANCER_IP"
+		log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
+		if [[ "$LOCAL_LOAD_BALANCER_IP" != "$OLD_LOCAL_LOAD_BALANCER_IP" ]]; then
+			log "lbip:$LOCAL_LOAD_BALANCER_IP"
+			OLD_LOCAL_LOAD_BALANCER_IP="$LOCAL_LOAD_BALANCER_IP"
+		fi
 	fi
 }
 
 function iptables_tj() {
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		nsenter -n"$NETNS" -- iptables "$@"
+		nsenter --net="$NETNS" -- iptables "$@"
 	else
 		iptables "$@"
 	fi
@@ -164,18 +276,24 @@ function block_host_traffic() {
 }
 
 function allow_load_balancer_traffic() {
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
-		log_error "Unexpected error while setting load balancer allow rule: $RESULT"
-		return 1
-	else
-		log "Added rule: -t filter -I TRAEFIKJAM -s $LOAD_BALANCER_IP -d $SUBNET -j RETURN"
+	if [[ -z "$LOAD_BALANCER_IPS" ]]; then
+		LOAD_BALANCER_IPS=$LOCAL_LOAD_BALANCER_IP
 	fi
+
+	for LOAD_BALANCER_IP in ${LOAD_BALANCER_IPS}; do
+		if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+			log_error "Unexpected error while setting load balancer allow rule: $RESULT"
+			return 1
+		else
+			log "Added rule: -t filter -I TRAEFIKJAM -s $LOAD_BALANCER_IP -d $SUBNET -j RETURN"
+		fi
+	done
 }
 
 function allow_whitelist_traffic() {
 	local IP
 	local RESULT
-	for CONTID in "${WHITELIST[@]}"; do
+	for CONTID in $WHITELIST; do
 		if ! IP=$(docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" "$CONTID" 2>&1) || [ -z "$IP" ]; then
 			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
 			return 1
