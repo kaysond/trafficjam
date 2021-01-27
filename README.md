@@ -31,7 +31,7 @@ TraefikJam is configured via several environment variables:
 * **ALLOW_HOST_TRAFFIC** - By default TraefikJam blocks traffic from containers to the Docker host in order to block communication via mapped ports (i.e. with `-p`). The host, however, can still initiate communication with the containers. Setting this variable allows containers to initiate communication with the host, and any port-mapped containers.
 * **DEBUG** - Setting this variable turns on debug logging
 * **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the traefikjam service
-* **SWARM_IMAGE** - The image the traefikjam swarm daemon should deploy (defaults to `kaysond/traefikjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/traefikjam:v0.1.0@sha256:7ac64543be94f7bcfe81a72b26b82a016729a3e58556e40880627306930b6962`)
+* **SWARM_IMAGE** - The image the traefikjam swarm daemon should deploy (defaults to `kaysond/traefikjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/traefikjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
 
 ## Setup Examples
 
