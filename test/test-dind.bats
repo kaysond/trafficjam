@@ -16,17 +16,17 @@ setup_file() {
 }
 
 @test "whitelisted containers can communicate with all other containers on the specified network" {
-	docker exec traefik ping -c 2 -w 5 public1
+	docker exec traefik ping -c 2 -w 10 public1
 
 	docker exec traefik curl --silent --show-error --max-time 5 public1:8000
 
-	docker exec traefik ping -c 2 -w 5 public2
+	docker exec traefik ping -c 2 -w 10 public2
 
 	docker exec traefik curl --silent --show-error --max-time 5 public2:8000
 }
 
 @test "containers on the specified network can not communicate with one another" {
-	run docker exec public1 ping -c 2 -w 5 public2
+	run docker exec public1 ping -c 2 -w 10 public2
 	[ "$status" -eq 1 ]
 
 	run docker exec public1 curl --silent --show-error --max-time 5 public2:8000
@@ -34,7 +34,7 @@ setup_file() {
 }
 
 @test "containers on the specified network can not communicate with one another (opposite direction)" {
-	run docker exec public2 ping -c 2 -w 5 public1
+	run docker exec public2 ping -c 2 -w 10 public1
 	[ "$status" -eq 1 ]
 
 	run docker exec public2 curl --silent --show-error --max-time 5 public1:8000
@@ -47,7 +47,7 @@ setup_file() {
 }
 
 @test "containers on non-specified networks can communicate" {
-	docker exec private1 ping -c 2 -w 5 traefik
-	docker exec traefik ping -c 2 -w 5 private1
+	docker exec private1 ping -c 2 -w 10 traefik
+	docker exec traefik ping -c 2 -w 10 private1
 	docker exec traefik curl --silent --show-error --max-time 5 private1:8000
 }

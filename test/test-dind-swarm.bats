@@ -37,8 +37,8 @@ setup_file() {
 	docker ps
 
 	#Each is run twice to hit both nodes
-	docker exec "$RP_ID" ping -c 2 -w 5 test_public1
-	docker exec "$RP_ID" ping -c 2 -w 5 test_public1
+	docker exec "$RP_ID" ping -c 2 -w 10 test_public1
+	docker exec "$RP_ID" ping -c 2 -w 10 test_public1
 
 	#docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public1:8000
 	#docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public1:8000
@@ -46,17 +46,17 @@ setup_file() {
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
 
-	docker exec "$RP_ID" ping -c 2 -w 5 test_public2
-	docker exec "$RP_ID" ping -c 2 -w 5 test_public2
+	docker exec "$RP_ID" ping -c 2 -w 10 test_public2
+	docker exec "$RP_ID" ping -c 2 -w 10 test_public2
 
 	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public2:8000
 	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public2:8000
 }
 
 @test "containers on the specified network can not communicate with one another" {
-	run docker exec "$TPU1_ID" ping -c 2 -w 5 test_public2
+	run docker exec "$TPU1_ID" ping -c 2 -w 10 test_public2
 	[ "$status" -eq 1 ]
-	run docker exec "$TPU1_ID" ping -c 2 -w 5 test_public2
+	run docker exec "$TPU1_ID" ping -c 2 -w 10 test_public2
 	[ "$status" -eq 1 ]
 
 	run docker exec "$TPU1_ID" curl --silent --show-error --max-time 5 test_public2:8000
@@ -66,9 +66,9 @@ setup_file() {
 }
 
 @test "containers on the specified network can not communicate with one another (opposite direction)" {
-	run docker exec "$TPU2_ID" ping -c 2 -w 5 test_public1
+	run docker exec "$TPU2_ID" ping -c 2 -w 10 test_public1
 	[ "$status" -eq 1 ]
-	run docker exec "$TPU2_ID" ping -c 2 -w 5 test_public1
+	run docker exec "$TPU2_ID" ping -c 2 -w 10 test_public1
 	[ "$status" -eq 1 ]
 
 	run docker exec "$TPU2_ID" curl --silent --show-error --max-time 5 test_public1:8000
@@ -86,11 +86,11 @@ setup_file() {
 }
 
 @test "containers on non-specified networks can communicate" {
-	docker exec "$TPR1_ID" ping -c 2 -w 5 test_reverseproxy
-	docker exec "$TPR1_ID" ping -c 2 -w 5 test_reverseproxy
+	docker exec "$TPR1_ID" ping -c 2 -w 10 test_reverseproxy
+	docker exec "$TPR1_ID" ping -c 2 -w 10 test_reverseproxy
 
-	docker exec "$RP_ID" ping -c 2 -w 5 test_private1
-	docker exec "$RP_ID" ping -c 2 -w 5 test_private1
+	docker exec "$RP_ID" ping -c 2 -w 10 test_private1
+	docker exec "$RP_ID" ping -c 2 -w 10 test_private1
 
 	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_private1:8000
 	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_private1:8000
