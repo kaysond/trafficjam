@@ -3,7 +3,7 @@ setup_file() {
 		#Wait for containers to startup
 		while [[ "$(docker ps | wc -l)" != "7" ]]; do sleep 1; done
 		#Wait for load balancer ips to get reported
-		while ! docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=traefikjam_FDB2E498') | grep -E "LOAD_BALANCER_IPS=172\.23\.0\.[:digit:] 172\.23\.0\.[:digit:]"; do sleep 1; done
+		while ! docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=traefikjam_FDB2E498') | grep -E "LOAD_BALANCER_IPS=172\.23\.0\.[[:digit:]] 172\.23\.0\.[[:digit:]]"; do sleep 1; done
 		#Wait for all rules to get added (causing log entries to repeat)
 		READY_LOGS=$(cat <<-'EOF'
 			 DEBUG: Subnet of test_public is 172.23.0.0/24

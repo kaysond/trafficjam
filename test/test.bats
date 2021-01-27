@@ -32,5 +32,5 @@
 
 function teardown_file() {
 	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose.yml down
-	#docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml down
+	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml down
 }
