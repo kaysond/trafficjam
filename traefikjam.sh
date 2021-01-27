@@ -12,8 +12,8 @@ if [[ -z "${WHITELIST_FILTER:-}" ]]; then
 fi
 
 #Initialize variables since we set -u
-SWARM_IMAGE="${SWARM_IMAGE:-kaysond/traefikjam}"
 SWARM_DAEMON="${SWARM_DAEMON:-}"
+SWARM_IMAGE="${SWARM_IMAGE:-kaysond/traefikjam}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
 DEBUG="${DEBUG:-}"
