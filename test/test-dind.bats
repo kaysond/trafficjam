@@ -16,11 +16,12 @@ setup_file() {
 }
 
 @test "whitelisted containers can communicate with all other containers on the specified network" {
-	docker exec traefik ping -c 2 -w 10 public1
+	#Sometimes this ping fails for no reason on github CI, so try it again
+	docker exec traefik ping -c 2 -w 10 public1 || docker exec traefik ping -c 2 -w 10 public1
 
 	docker exec traefik curl --silent --show-error --max-time 5 public1:8000
 
-	docker exec traefik ping -c 2 -w 10 public2
+	docker exec traefik ping -c 2 -w 10 public2 || docker exec traefik ping -c 2 -w 10 public2
 
 	docker exec traefik curl --silent --show-error --max-time 5 public2:8000
 }
