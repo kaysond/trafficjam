@@ -3,6 +3,10 @@
 	shellcheck -x "$BATS_TEST_DIRNAME/../traefikjam.sh"
 }
 
+@test "Build the image" {
+	docker build --tag traefikjam_bats --file "$BATS_TEST_DIRNAME"/../Dockerfile "$BATS_TEST_DIRNAME"/..
+}
+
 @test "Build the test image" {
 	docker build --tag traefikjam_test --file "$BATS_TEST_DIRNAME"/containers/traefikjam_test/Dockerfile  "$BATS_TEST_DIRNAME"/..
 }
@@ -33,4 +37,5 @@
 function teardown_file() {
 	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose.yml down
 	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml down
+	docker image rm --force traefikjam_bats traefikjam_test
 }
