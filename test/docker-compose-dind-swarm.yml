@@ -1,8 +1,8 @@
 version: '3.8'
 
 services:
-  traefikjam:
-    image: traefikjam
+  trafficjam:
+    image: trafficjam
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -11,7 +11,7 @@ services:
       NETWORK: test_public
       WHITELIST_FILTER: ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
       DEBUG: "true"
-      SWARM_IMAGE: "traefikjam"
+      SWARM_IMAGE: "trafficjam"
       SWARM_DAEMON: "true"
     deploy:
       replicas: 1

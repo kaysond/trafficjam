@@ -2,9 +2,9 @@ FROM docker
 
 RUN apk add --no-cache bash iproute2 iptables tzdata
 
-COPY traefikjam.sh /usr/local/bin/traefikjam.sh
-COPY traefikjam-functions.sh /usr/local/bin/traefikjam-functions.sh
+COPY trafficjam.sh /usr/local/bin/trafficjam.sh
+COPY trafficjam-functions.sh /usr/local/bin/trafficjam-functions.sh
 
-HEALTHCHECK --timeout=3s CMD ps aux | grep [t]raefikjam.sh
+HEALTHCHECK --timeout=3s CMD ps aux | grep [t]rafficjam.sh
 
-ENTRYPOINT ["/usr/local/bin/traefikjam.sh"]
+ENTRYPOINT ["/usr/local/bin/trafficjam.sh"]

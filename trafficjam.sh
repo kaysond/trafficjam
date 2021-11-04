@@ -13,7 +13,7 @@ fi
 
 #Initialize variables since we set -u
 SWARM_DAEMON="${SWARM_DAEMON:-}"
-SWARM_IMAGE="${SWARM_IMAGE:-kaysond/traefikjam}"
+SWARM_IMAGE="${SWARM_IMAGE:-kaysond/trafficjam}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
 DEBUG="${DEBUG:-}"
@@ -32,7 +32,7 @@ fi
 #CRC32 without packages
 TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
 
-. traefikjam-functions.sh
+. trafficjam-functions.sh
 
 ERRCOUNT=0
 if [[ -n "$SWARM_DAEMON" ]]; then
@@ -85,7 +85,7 @@ else
 
 			allow_whitelist_traffic || continue
 
-			remove_old_rules TRAEFIKJAM; remove_old_rules TRAEFIKJAM_INPUT || continue
+			remove_old_rules TRAFFICJAM; remove_old_rules TRAFFICJAM_INPUT || continue
 
 			OLD_SUBNET="$SUBNET"
 

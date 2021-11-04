@@ -15,7 +15,7 @@ jobs:
       - name: Prepare
         id: prep
         run: |
-          DOCKER_IMAGE=kaysond/traefikjam
+          DOCKER_IMAGE=kaysond/trafficjam
           VERSION=edge
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}

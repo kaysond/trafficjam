@@ -37,7 +37,7 @@ jobs:
           context: ./
           file: ./Dockerfile
           push: true
-          tags: kaysond/traefikjam:dev
+          tags: kaysond/trafficjam:dev
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
 

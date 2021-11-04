@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  traefikjam_test:
-    image: traefikjam_test
-    container_name: traefikjam_test
+  trafficjam_test:
+    image: trafficjam_test
+    container_name: trafficjam_test
     privileged: true

@@ -13,6 +13,6 @@ RUN apk add --no-cache iptables git bash curl python3-dev py-pip libffi-dev open
     /opt/bats/install.sh /usr/local
 
 #Copy Repo
-COPY . /opt/traefikjam
+COPY . /opt/trafficjam
 
-ENTRYPOINT /opt/traefikjam/test/containers/traefikjam_test/entrypoint.sh
+ENTRYPOINT /opt/trafficjam/test/containers/trafficjam_test/entrypoint.sh

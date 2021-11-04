@@ -29,7 +29,7 @@ function log_debug() {
 
 function remove_service() {
 	local ID
-	if ID=$(docker service ls --quiet --filter "label=traefikjam.id=$TJINSTANCE") && [ -n "$ID" ]; then
+	if ID=$(docker service ls --quiet --filter "label=trafficjam.id=$TJINSTANCE") && [ -n "$ID" ]; then
 		local RESULT
 		if ! RESULT=$(docker rm "$ID" 2>&1); then
 			log_error "Unexpected error while removing existing service: $RESULT"
@@ -42,11 +42,11 @@ function remove_service() {
 }
 
 function deploy_service() {
-	if ! docker inspect "$(docker service ls --quiet --filter "label=traefikjam.id=$TJINSTANCE")" &> /dev/null; then
+	if ! docker inspect "$(docker service ls --quiet --filter "label=trafficjam.id=$TJINSTANCE")" &> /dev/null; then
 		if ! SERVICE_ID=$(docker service create \
 				--quiet \
 				--detach \
-				--name "traefikjam_$TJINSTANCE" \
+				--name "trafficjam_$TJINSTANCE" \
 				--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
 				--mount type=bind,source=/var/run/docker/netns,destination=/var/run/netns \
 				--env TZ="$TZ" \
@@ -59,16 +59,16 @@ function deploy_service() {
 				--mode global \
 				--restart-condition on-failure \
 				--network host \
-				--label traefikjam.id="$TJINSTANCE" \
+				--label trafficjam.id="$TJINSTANCE" \
 				"$SWARM_IMAGE" 2>&1
 			); then
 			log_error "Unexpected error while deploying service: $SERVICE_ID"
 			return 1
 		else
 			#docker service create may print warnings to stderr even if it succeeds
-			#particularly due to the traefikjam image not being accessible in a registry during CI
+			#particularly due to the trafficjam image not being accessible in a registry during CI
 			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1) 
-			log "Created service traefikjam_$TJINSTANCE: $SERVICE_ID"
+			log "Created service trafficjam_$TJINSTANCE: $SERVICE_ID"
 		fi
 	else
 		log_debug "Existing service found, not deploying"
@@ -200,12 +200,12 @@ function iptables_tj() {
 
 function add_chain() {
 	local RESULT
-	if ! iptables_tj -t filter -L TRAEFIKJAM >& /dev/null; then
-		if ! RESULT=$(iptables_tj -N TRAEFIKJAM 2>&1); then
-			log_error "Unexpected error while adding chain TRAEFIKJAM: $RESULT"
+	if ! iptables_tj -t filter -L TRAFFICJAM >& /dev/null; then
+		if ! RESULT=$(iptables_tj -N TRAFFICJAM 2>&1); then
+			log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
 			return 1
 		else
-			log "Added chain: TRAEFIKJAM"
+			log "Added chain: TRAFFICJAM"
 		fi
 	fi
 
@@ -216,42 +216,42 @@ function add_chain() {
 		CHAIN="DOCKER-USER"
 	fi
 
-	if ! iptables_tj -t filter -L "$CHAIN" | grep "TRAEFIKJAM" >& /dev/null; then
-		if ! RESULT=$(iptables_tj -t filter -I "$CHAIN" -j TRAEFIKJAM 2>&1); then
+	if ! iptables_tj -t filter -L "$CHAIN" | grep "TRAFFICJAM" >& /dev/null; then
+		if ! RESULT=$(iptables_tj -t filter -I "$CHAIN" -j TRAFFICJAM 2>&1); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
 		else
-			log "Added rule: -t filter -I $CHAIN -j TRAEFIKJAM"
+			log "Added rule: -t filter -I $CHAIN -j TRAFFICJAM"
 		fi
 	fi
 }
 
 function block_subnet_traffic() {
 	local RESULT
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj -t filter -I TRAFFICJAM -s "$SUBNET" -d "$SUBNET" -j DROP -m comment --comment "trafficjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting subnet blocking rule: $RESULT"
 		return 1
 	else
-		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -j DROP"
+		log "Added rule: -t filter -I TRAFFICJAM -s $SUBNET -d $SUBNET -j DROP"
 	fi
 }
 
 function add_input_chain() {
 	local RESULT
-	if ! iptables_tj -t filter -L TRAEFIKJAM_INPUT >& /dev/null; then
-		if ! RESULT=$(iptables_tj -N TRAEFIKJAM_INPUT); then
-			log_error "Unexpected error while adding chain TRAEFIKJAM_INPUT: $RESULT"
+	if ! iptables_tj -t filter -L TRAFFICJAM_INPUT >& /dev/null; then
+		if ! RESULT=$(iptables_tj -N TRAFFICJAM_INPUT); then
+			log_error "Unexpected error while adding chain TRAFFICJAM_INPUT: $RESULT"
 			return 1
 		else
-			log "Added chain: TRAEFIKJAM_INPUT"
+			log "Added chain: TRAFFICJAM_INPUT"
 		fi
 	fi
-	if ! iptables_tj -t filter -L INPUT | grep "TRAEFIKJAM_INPUT" >& /dev/null; then
-		if ! RESULT=$(iptables_tj -t filter -I INPUT -j TRAEFIKJAM_INPUT); then
+	if ! iptables_tj -t filter -L INPUT | grep "TRAFFICJAM_INPUT" >& /dev/null; then
+		if ! RESULT=$(iptables_tj -t filter -I INPUT -j TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
 		else
-			log "Added rule: -t filter -I INPUT -j TRAEFIKJAM_INPUT"
+			log "Added rule: -t filter -I INPUT -j TRAFFICJAM_INPUT"
 		fi
 	fi
 }
@@ -259,19 +259,19 @@ function add_input_chain() {
 function block_host_traffic() {
 	local RESULT
 	#Drop local socket-bound packets coming from the target subnet
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -j DROP -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj -t filter -I TRAFFICJAM_INPUT -s "$SUBNET" -j DROP -m comment --comment "trafficjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		return 1
 	else
-		log "Added rule: -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -j DROP"
+		log "Added rule: -t filter -I TRAFFICJAM_INPUT -s $SUBNET -j DROP"
 	fi
 
 	#But allow them if the connection was initiated by the host
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj -t filter -I TRAFFICJAM_INPUT -s "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "trafficjam-$TJINSTANCE $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		return 1
 	else
-		log "Added rule: -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
+		log "Added rule: -t filter -I TRAFFICJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
 	fi
 }
 
@@ -281,11 +281,11 @@ function allow_load_balancer_traffic() {
 	fi
 
 	for LOAD_BALANCER_IP in ${LOAD_BALANCER_IPS}; do
-		if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+		if ! RESULT=$(iptables_tj -t filter -I TRAFFICJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN -m comment --comment "trafficjam-$TJINSTANCE $DATE"); then
 			log_error "Unexpected error while setting load balancer allow rule: $RESULT"
 			return 1
 		else
-			log "Added rule: -t filter -I TRAEFIKJAM -s $LOAD_BALANCER_IP -d $SUBNET -j RETURN"
+			log "Added rule: -t filter -I TRAFFICJAM -s $LOAD_BALANCER_IP -d $SUBNET -j RETURN"
 		fi
 	done
 }
@@ -298,19 +298,19 @@ function allow_whitelist_traffic() {
 			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
 			return 1
 		else
-			if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$IP" -d "$SUBNET" -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+			if ! RESULT=$(iptables_tj -t filter -I TRAFFICJAM -s "$IP" -d "$SUBNET" -j RETURN -m comment --comment "trafficjam-$TJINSTANCE $DATE"); then
 				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 				return 1
 			else
-				log "Added rule: -t filter -I TRAEFIKJAM -s $IP -d $SUBNET -j RETURN"
+				log "Added rule: -t filter -I TRAFFICJAM -s $IP -d $SUBNET -j RETURN"
 			fi
 		fi
 	done
-	if ! RESULT=$(iptables_tj -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "traefikjam-$TJINSTANCE $DATE"); then
+	if ! RESULT=$(iptables_tj -t filter -I TRAFFICJAM -s "$SUBNET" -d "$SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN -m comment --comment "trafficjam-$TJINSTANCE $DATE"); then
 		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 		return 1
 	else
-		log "Added rule: -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
+		log "Added rule: -t filter -I TRAFFICJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
 	fi
 }
 
@@ -324,7 +324,7 @@ function remove_old_rules() {
 		return 1
 	fi
 	#Make sure to reverse sort rule numbers othwerise the numbers change!
-	if ! RULENUMS=$(echo "$RULES" | grep "traefikjam-$TJINSTANCE" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
+	if ! RULENUMS=$(echo "$RULES" | grep "trafficjam-$TJINSTANCE" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
 		log "No old rules to remove from chain '$1'"
 	else
 		for RULENUM in $RULENUMS; do
