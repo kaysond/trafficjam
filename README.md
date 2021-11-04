@@ -25,7 +25,7 @@ Potential solutions include:
 ## What TraefikJam Does
 TraefikJam allows you to safely and easily connect all of your backend containers to your reverse proxy using a single docker network by preventing the backend containers from communicating with each other.
 
-![TraefikJam](./traefikjam.png)
+![TraefikJam](./traefikjam_diagram.png)
 
 ## How TraefikJam Works
 TraefikJam works by adding some firewall (`iptables`) rules to the docker network you specify. First, it blocks all traffic on the network. Then it adds a rule that only allows traffic to/from the container(s) you specify in the whitelist. It continually monitors the docker network to make sure the rules stay up to date as you add or remove containers.
