@@ -22,16 +22,28 @@ Potential solutions include:
   * Routes are automatically discovered by the proxy without manual configuration :)
   * Every service only needs a connection to one network :)
 
+## What TraefikJam Does
+TraefikJam allows you to safely and easily connect all of your backend containers to your reverse proxy using a single docker network by preventing the backend containers from communicating with each other.
+
+![TraefikJam](./traefikjam.png)
+
+## How TraefikJam Works
+TraefikJam works by adding some firewall (`iptables`) rules to the docker network you specify. First, it blocks all traffic on the network. Then it adds a rule that only allows traffic to/from the container(s) you specify in the whitelist. It continually monitors the docker network to make sure the rules stay up to date as you add or remove containers.
+
+## Dependencies
+* Linux with iptables whose version matches the iptables in TraefikJam (currently `1.8.4 (legacy)`)
+* Docker >20.10.0
+
 ## Configuration
 TraefikJam is configured via several environment variables:
 * **TZ** - Timezone (for logging)
 * **POLL_INTERVAL** - How often TraefikJam checks Docker for changes
 * **NETWORK** - The name of the Docker network this instance of TraefikJam should manage (multiple instances can be run for different networks)
 * **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
-* **ALLOW_HOST_TRAFFIC** - By default TraefikJam blocks traffic from containers to the Docker host in order to block communication via mapped ports (i.e. with `-p`). The host, however, can still initiate communication with the containers. Setting this variable allows containers to initiate communication with the host, and any port-mapped containers.
-* **DEBUG** - Setting this variable turns on debug logging
 * **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the traefikjam service
 * **SWARM_IMAGE** - The image the traefikjam swarm daemon should deploy (defaults to `kaysond/traefikjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/traefikjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
+* **ALLOW_HOST_TRAFFIC** - Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [Technical Details](#technical-details) for more information).
+* **DEBUG** - Setting this variable turns on debug logging
 
 ## Setup Examples
 
@@ -120,22 +132,28 @@ services:
         constraints: ['node.role==manager']
 ```
 
-#### Notes on docker swarm
-* Docker swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
-* Docker swarm employs a load balancer on each node whose IP address must be permitted to communicate to the subnet. Since each node (even a manager) is only aware of its own load balancer's IP address, TraefikJam must operate as a daemon to start a "child" service, collect the reported load balancer IP addresses, and update the service with the information.
+**Note:** Docker Swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
 
-## Operation
-TraefikJam limits traffic between containers by adding rules to the host iptables. The Docker network subnet and the IP addresses of whitelisted containers are determined. A rule is added to the end of the `DOCKER-USER` chain to jump to a `TRAEFIKJAM` chain. Then, several rules are added to a `TRAEFIKJAM`  chain in the filter table:
-1. Accept already-established traffic whose source and destination are the network subnet - `-s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
-2. Accept traffic from whitelisted containers destined for the network subnet (this requires one rule per container) - `-s "$IP" -d "$SUBNET" -j RETURN`
-3. Drop traffic whose source and destination are the network subnet - `-s "$SUBNET" -d "$SUBNET" -j DROP`
+## Technical Details
+TraefikJam limits traffic between containers by adding the necessary iptables rules on the host. When Docker Swarm is in use, TraefikJam acts as a daemon that spawns a global mode service so that the rules are added to the correct network namespace on each host. This daemon-service method is also required because Docker Swarm employs a separate load balancer on each node whose IP address must be permitted to communicate to the subnet. Since each node (even a manager) is only aware of its own load balancer's IP address, the daemon must start the service, collect the reported load balancer IP addresses of all nodes, then update the service.
 
-For Docker Swarm, another rule is added in the **2.** position allowing traffic from the overlay network's load balancers
+First, TraefikJam queries the docker daemon to determine the specified network's subnet and the ID's of whitelisted containers. If Docker Swarm is in use, TraefikJam also determines the correct network namespace and load balancer IP on the host.
 
-Additionally, a jump rule is added from the `INPUT` chain to the `TRAEFIKJAM_INPUT` chain. Two rules are added here:
-1. Accept already-established traffic whose source is the network subnet - `-s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
-2. Drop traffic whose source is the network subnet - `-s "$SUBNET" -j DROP`
+TraefikJam then adds its own chain in the `filter` table called `TRAEFIKJAM`. It also adds a jump rule to the `DOCKER-USER` chain (or `FORWARD` for Docker Swarm) to jump to this chain: `iptables -t filter -I <chain> -j TRAEFIKJAM`
 
-## Dependencies
-* Linux with iptables whose version matches the iptables in TraefikJam (currently `1.8.4 (legacy)`)
-* Docker >20.10.0
+Then, TraefikJam inserts several rules to the `TRAEFIKJAM` chain in the `filter` table which are ultimately evaluated top to bottom:
+1. Accept already-established traffic whose source and destination are the network subnet - `iptables -t filter -I TRAEFIKJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
+2. Accept traffic from whitelisted containers destined for the network subnet (this requires one rule per container) - `iptables -t filter -I TRAEFIKJAM -s "$IP" -d "$SUBNET" -j RETURN`
+3. (Docker Swarm only) Accept traffic from all load balancers (this requires one rule per node) - `iptables -t filter -I TRAEFIKJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN`
+4. Drop traffic whose source and destination are the network subnet - `iptables -t filter -I TRAEFIKJAM -s "$SUBNET" -d "$SUBNET" -j DROP`
+(Note that the script inserts the rules in reverse order since they're inserted to the top of the chain)
+
+Thus all traffic on the relevant subnet hits the `DROP` on Rule 4 except traffic initiated by the whitelisted containers (usually the reverse proxy).
+
+This alone is not sufficient to prevent inter-container communication, however. If a container has a port mapped to the host, other containers are still able to access it via the host ip address and the mapped port. This is because Rule 4 above only drops traffic within the subnet, not traffic to the outside, to allow containers to have internet access.
+
+This is blocked by another chain and set of rules. First, TraefikJam adds another chain in the `filter` table: `TRAEFIKJAM_INPUT`. Then it adds a jump rule to the `INPUT` chain: `iptables -t filter -I input -j TRAEFIKJAM_INPUT`. The `INPUT` chain is used here because the incoming packet is destined for an IP address assigned to the host and does not need to be forwarded.
+
+TraefikJam adds two rules to this new chain, again shown in final order:
+1. Accept already-established traffic whose source is the network subnet - `iptables -t filter -I TRAEFIKJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
+2. Drop traffic whose source is the network subnet - `iptables -t filter -I TRAEFIKJAM_INPUT -s "$SUBNET" -j DROP`
