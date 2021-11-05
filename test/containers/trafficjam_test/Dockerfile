@@ -1,14 +1,12 @@
-FROM docker:20.10.2-dind
+FROM docker:20.10.10-dind
 
 ARG BATS_VER=v1.2.1
+ARG DOCKER_COMPOSE_VER=v2.0.1
 
 #Install Testing Dependencies
-RUN apk add --no-cache iptables git bash curl python3-dev py-pip libffi-dev openssl-dev gcc libc-dev make && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh && \
-    chmod 700 rustup.sh && \
-    ./rustup.sh -y && \
-    source $HOME/.cargo/env && \
-    pip install docker-compose && \
+RUN apk add --no-cache iptables git bash curl && \
+    curl -SL https://github.com/docker/compose/releases/download/v2.0.1/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && \
+    chmod a+x /usr/local/bin/docker-compose && \
     git clone --depth 1 --branch $BATS_VER  https://github.com/bats-core/bats-core.git /opt/bats && \
     /opt/bats/install.sh /usr/local
 
