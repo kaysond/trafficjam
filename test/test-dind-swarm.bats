@@ -1,18 +1,52 @@
 setup_file() {
+	#Wait for images to finish building on container startup for 45s
+	while ! docker image ls | grep -q whoami; do
+		sleep $(( ++i )) && \
+		(( i < 10 )) || {
+			echo Timed out waiting for images to be built >&2
+			docker image ls >&2
+			exit 1
+		}
+	done
+
+	#Only run these checks on the manager
 	if docker node ls &> /dev/null; then
-		#Wait for containers to startup
-		while [[ "$(docker ps | wc -l)" != "7" ]]; do sleep 1; done
-		#Wait for load balancer ips to get reported
-		while ! docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | grep -E "LOAD_BALANCER_IPS=172\.23\.0\.[[:digit:]] 172\.23\.0\.[[:digit:]]"; do sleep 1; done
-		#Wait for all rules to get added (causing log entries to repeat)
-		READY_LOGS=$(cat <<-'EOF'
-			 DEBUG: Subnet of test_public is 172.23.0.0/24
-			 DEBUG: Error Count: 0
-			 DEBUG: Network driver of test_public is overlay
-			 DEBUG: Subnet of test_public is 172.23.0.0/24
-			EOF
-		)
-		while [[ "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 4)" != "$READY_LOGS" ]]; do sleep 1; done
+		#Wait for containers to startup for 45s
+		while [[ "$(docker ps | wc -l)" != "7" ]]; do
+			sleep $(( ++i )) && \
+			(( i < 10 )) || { 
+				echo Timed out waiting for container startup >&2
+				docker ps >&2
+				exit 1
+			}
+		done
+
+		#Wait for load balancer ips to get reported for 45s
+		while ! docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
+			grep -q -E "LOAD_BALANCER_IPS=172\.23\.0\.[[:digit:]] 172\.23\.0\.[[:digit:]]"; do
+
+			sleep $(( ++j )) && \
+			(( j < 10 )) || { 
+				echo Timed out waiting for load balancer IPs to be reported >&2
+				docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') >&2
+				exit 1
+			}
+		done
+
+		#Wait for all rules to get added (causing log entries to repeat) for 135s
+		while [[ "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
+			awk -F']' '{ print $2 }' | \
+			grep -v Whitelisted | \
+			tail -n 6 | \
+			grep -c "DEBUG: Error Count: 0")" != "2" ]]; do
+
+			sleep $(( ++k )) && \
+			(( k < 20 )) || {
+				echo Timed out waiting for rules to be added >&2
+				docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6 >&2
+				exit 1
+			}
+		done
 	fi
 	export RP_ID=$(docker ps --quiet --filter 'name=test_reverseproxy')
 	export TJ_ID=$(docker ps --quiet --filter 'name=trafficjam_FDB2E498')

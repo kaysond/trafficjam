@@ -1,8 +1,16 @@
 setup_file() {
-	if iptables -t filter -L | grep trafficjam; then
-		echo "found existing trafficjam rules" >&2 && exit 1
+	if iptables -t filter -L | grep -q trafficjam; then
+		echo "Found existing trafficjam rules" >&2 && exit 1
 	fi
-	while ! docker image ls | grep whoami; do sleep 1; done #wait for images to finish building on container startup
+	#Wait for images to finish building on container startup for 45s
+	while ! docker image ls | grep -q whoami; do
+		sleep $(( ++i )) && \
+		(( i < 10 )) || {
+			echo Timed out waiting for images to be built >&2
+			docker image ls >&2
+			exit 1
+		}
+	done
 	docker-compose -f /opt/trafficjam/test/docker-compose-dind.yml up -d
 	docker exec traefik apk add --no-cache curl
 }
