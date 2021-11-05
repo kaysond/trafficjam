@@ -1,0 +1,21 @@
+name: CI - Latest
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Install bats
+        run: |
+          sudo git clone --depth 1 --branch v1.2.1 https://github.com/bats-core/bats-core.git /opt/bats
+          sudo /opt/bats/install.sh /usr/local
+          
+      - name: Run test suite
+        run: bats test/test.bats
