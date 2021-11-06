@@ -38,21 +38,16 @@ setup_file() {
 
 		#Wait for all rules to get added (causing log entries to repeat) for 135s
 		i=0
-		while [[ "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
+		while [[ $(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
 			awk -F']' '{ print $2 }' | \
 			grep -v Whitelisted | \
 			tail -n 6 | \
-			grep -c "DEBUG: Error Count: 0")" != "2" ]]; do
+			grep -c "DEBUG: Error Count: 0") != "2" ]]; do
 
 			sleep $(( ++i )) && \
 			(( i < 20 )) || {
 				echo Timed out waiting for rules to be added >&2
 				docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6 >&2
-				echo "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
-			awk -F']' '{ print $2 }' | \
-			grep -v Whitelisted | \
-			tail -n 6 | \
-			grep -c "DEBUG: Error Count: 0")" >&2
 				exit 1
 			}
 		done
