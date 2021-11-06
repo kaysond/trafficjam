@@ -1,10 +1,10 @@
 # TrafficJam (Beta)
 A Docker firewall for your reverse proxy network
 
-[![Build - Latest](https://github.com/kaysond/trafficjam/actions/workflows/build-latest.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/build-latest.yml)[![CI - Latest](https://github.com/kaysond/trafficjam/actions/workflows/ci-latest.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/ci-latest.yml)[![Build - Nightly](https://github.com/kaysond/trafficjam/actions/workflows/build-nightly.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/build-nightly.yml)[![CI - Nightly](https://github.com/kaysond/trafficjam/actions/workflows/ci-nightly.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/ci-nightly.yml)
+[![Build - Latest](https://github.com/kaysond/trafficjam/actions/workflows/build-latest.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/build-latest.yml) [![CI - Latest](https://github.com/kaysond/trafficjam/actions/workflows/ci-latest.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/ci-latest.yml) [![Build - Nightly](https://github.com/kaysond/trafficjam/actions/workflows/build-nightly.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/build-nightly.yml) [![CI - Nightly](https://github.com/kaysond/trafficjam/actions/workflows/ci-nightly.yml/badge.svg)](https://github.com/kaysond/trafficjam/actipns/workflows/ci-nightly.yml)
 
 ## Threat Model
-**Why do you need something like TrafficJam?** Reverse proxies are often used to authenticate external access to internal services, providing benefits such as centralized user management, access control, 2FA and SSO. In a typical Docker setup, multiple services are connected to the reverse proxy via a single network. If a user authenticates to one service and is able to compromise that service (such as by using [this Pi-Hole vulnerability](http://https://natedotred.wordpress.com/2020/03/28/cve-2020-8816-pi-hole-remote-code-execution/ "this Pi-Hole vulnerability")), that user will gain access to the entire network *behind* the reverse proxy, and can access every service on the network whether they would normally have permission or not.
+**Why do you need something like TrafficJam?** Reverse proxies are often used to authenticate external access to internal services, providing benefits such as centralized user management, access control, 2FA and SSO. In a typical Docker setup, multiple services are connected to the reverse proxy via a single network. If a user authenticates to one service and is able to compromise that service (such as by using [this Pi-Hole vulnerability](https://natedotred.wordpress.com/2020/03/28/cve-2020-8816-pi-hole-remote-code-execution/ "this Pi-Hole vulnerability")), that user will gain access to the entire network *behind* the reverse proxy, and can access every service on the network whether they would normally have permission or not.
 
 Potential solutions include:
 * Use each service's own authentication
@@ -27,33 +27,17 @@ TrafficJam allows you to safely and easily connect all of your backend container
 ## How TrafficJam Works
 TrafficJam works by adding some firewall (`iptables`) rules to the docker network you specify. First, it blocks all traffic on the network. Then it adds a rule that only allows traffic to/from the container(s) you specify in the whitelist. It continually monitors the docker network to make sure the rules stay up to date as you add or remove containers.
 
-## Dependencies
-* Linux with iptables whose version matches the iptables in TrafficJam (currently `1.8.4 (legacy)`)
-* Docker >20.10.0
-
-## Configuration
-TrafficJam is configured via several environment variables:
-* **TZ** - Timezone (for logging)
-* **POLL_INTERVAL** - How often TrafficJam checks Docker for changes
-* **NETWORK** - The name of the Docker network this instance of TrafficJam should manage (multiple instances can be run for different networks)
-* **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
-* **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service
-* **SWARM_IMAGE** - The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
-* **ALLOW_HOST_TRAFFIC** - Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [Technical Details](#technical-details) for more information).
-* **DEBUG** - Setting this variable turns on debug logging
-
 ## Setup Examples
 
 ### Vanilla Docker
 `docker-cli`:
 ```
 docker run -d --name trafficjam --cap-add NET_ADMIN --network host \
-	-v "/var/run/docker.sock:/var/run/docker.sock" \
-	--env TZ=America/Los_Angeles \
-	--env POLL_INTERVAL=5 \
-	--env NETWORK=traefik_network \
-	--env WHITELIST_FILTER="ancestor=traefik:latest" \
-	kaysond/trafficjam
+  -v "/var/run/docker.sock:/var/run/docker.sock" \
+  --env NETWORK=traefik_public \
+  --env WHITELIST_FILTER="ancestor=traefik:latest" \
+  --env TZ="America/Los_Angeles"
+  kaysond/trafficjam
 ```
 
 `docker-compose.yml`:
@@ -63,33 +47,30 @@ services:
   trafficjam:
     container_name: trafficjam
     image: kaysond/trafficjam
-	cap_add:
+  cap_add:
       - NET_ADMIN
     network_mode: host
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      NETWORK: traefik_public
+      WHITELIST_FILTER: ancestor=traefik:latest
       TZ: America/Los_Angeles
-      POLL_INTERVAL: 5
-      NETWORK: nginx_network
-      WHITELIST_FILTER: ancestor=nginx:latest
 
-  nginx:
-    container_name: nginx
-    image: nginx:latest
+  traefik:
+    container_name: traefik
+    image: traefik:latest
     networks:
-      nginx_network:
+      traefik_public:
 
-  example_service:
-    container_name: whoami2
-    image: jwilder/whoami
-    ports:
-      - "8000:8000"
+  whoami:
+    container_name: whoami
+    image: traefik/whoami
     networks:
-      nginx_network:
+      traefik_public:
 
 networks:
-  nginx_network:
+  traefik_public:
 ```
 
 ### Docker Swarm
@@ -98,11 +79,10 @@ networks:
 docker service create \
   --name trafficjam \
   --mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
-  --env TZ=America/Los_Angeles \
-  --env POLL_INTERVAL=5 \
-  --env NETWORK=traefik_network \
+  --env NETWORK=traefik_public \
   --env WHITELIST_FILTER=ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9 \
   --env SWARM_DAEMON=true \
+  --env TZ=America/Los_Angeles \
   --replicas 1 \
   --constraint node.role==manager \
   kaysond/trafficjam
@@ -118,11 +98,10 @@ services:
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      TZ: America/Los_Angeles
-      POLL_INTERVAL: 5
       NETWORK: traefik_network
       WHITELIST_FILTER: ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
       SWARM_DAEMON: "true"
+      TZ: America/Los_Angeles
     deploy:
       replicas: 1
       placement:
@@ -130,6 +109,21 @@ services:
 ```
 
 **Note:** Docker Swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
+
+## Configuration
+TrafficJam is configured via several environment variables:
+* **NETWORK** - The name of the Docker network this instance of TrafficJam should manage (multiple instances can be run for different networks)
+* **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
+* **TZ** - Timezone (for logging)
+* **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service
+* **SWARM_IMAGE** - The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
+* **POLL_INTERVAL** - How often TrafficJam checks Docker for changes
+* **ALLOW_HOST_TRAFFIC** - Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [Technical Details](#technical-details) for more information).
+* **DEBUG** - Setting this variable turns on debug logging
+
+## Dependencies
+* Linux with iptables whose version matches the iptables in TrafficJam (currently `1.8.4 (legacy)`)
+* Docker >20.10.0
 
 ## Technical Details
 TrafficJam limits traffic between containers by adding the necessary iptables rules on the host. When Docker Swarm is in use, TrafficJam acts as a daemon that spawns a global mode service so that the rules are added to the correct network namespace on each host. This daemon-service method is also required because Docker Swarm employs a separate load balancer on each node whose IP address must be permitted to communicate to the subnet. Since each node (even a manager) is only aware of its own load balancer's IP address, the daemon must start the service, collect the reported load balancer IP addresses of all nodes, then update the service.
