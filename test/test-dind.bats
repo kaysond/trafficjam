@@ -3,6 +3,7 @@ setup_file() {
 		echo "Found existing trafficjam rules" >&2 && exit 1
 	fi
 	#Wait for images to finish building on container startup for 45s
+	i=0
 	while ! docker image ls | grep -q whoami; do
 		sleep $(( ++i )) && \
 		(( i < 10 )) || {

@@ -1,5 +1,6 @@
 setup_file() {
 	#Wait for images to finish building on container startup for 45s
+	i=0
 	while ! docker image ls | grep -q whoami; do
 		sleep $(( ++i )) && \
 		(( i < 10 )) || {
@@ -12,6 +13,7 @@ setup_file() {
 	#Only run these checks on the manager
 	if docker node ls &> /dev/null; then
 		#Wait for containers to startup for 45s
+		i=0
 		while [[ "$(docker ps | wc -l)" != "7" ]]; do
 			sleep $(( ++i )) && \
 			(( i < 10 )) || { 
@@ -22,11 +24,12 @@ setup_file() {
 		done
 
 		#Wait for load balancer ips to get reported for 45s
+		i=0
 		while ! docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
 			grep -q -E "LOAD_BALANCER_IPS=172\.23\.0\.[[:digit:]] 172\.23\.0\.[[:digit:]]"; do
 
-			sleep $(( ++j )) && \
-			(( j < 10 )) || { 
+			sleep $(( ++i )) && \
+			(( i < 10 )) || { 
 				echo Timed out waiting for load balancer IPs to be reported >&2
 				docker inspect --format '{{ .Config.Env }}' $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') >&2
 				exit 1
@@ -34,14 +37,15 @@ setup_file() {
 		done
 
 		#Wait for all rules to get added (causing log entries to repeat) for 135s
+		i=0
 		while [[ "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | \
 			awk -F']' '{ print $2 }' | \
 			grep -v Whitelisted | \
 			tail -n 6 | \
 			grep -c "DEBUG: Error Count: 0")" != "2" ]]; do
 
-			sleep $(( ++k )) && \
-			(( k < 20 )) || {
+			sleep $(( ++i )) && \
+			(( i < 20 )) || {
 				echo Timed out waiting for rules to be added >&2
 				docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6 >&2
 				exit 1
