@@ -35,13 +35,16 @@ TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump
 . trafficjam-functions.sh
 
 ERRCOUNT=0
+
+IPTABLES_CMD=iptables
+
+detect_iptables_version || continue
+
 if [[ -n "$SWARM_DAEMON" ]]; then
 	remove_service
 
 	while true; do
 		tj_sleep
-
-		detect_iptables_version || continue
 
     	deploy_service || continue
 

@@ -193,8 +193,6 @@ function get_local_load_balancer_ip() {
 function detect_iptables_version() {
 	if iptables-nft -L DOCKER-USER &> /dev/null; then
 		IPTABLES_CMD=iptables-nft
-	else
-		IPTABLES_CMD=iptables
 	fi
 }
 
