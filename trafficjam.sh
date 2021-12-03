@@ -41,6 +41,8 @@ if [[ -n "$SWARM_DAEMON" ]]; then
 	while true; do
 		tj_sleep
 
+		detect_iptables_version || continue
+
     	deploy_service || continue
 
 		get_load_balancer_ips || continue
