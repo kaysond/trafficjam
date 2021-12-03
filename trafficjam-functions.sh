@@ -190,11 +190,17 @@ function get_local_load_balancer_ip() {
 	fi
 }
 
-function iptables_tj() {
+function detect_iptables_version() {
+	if iptables-nft -L DOCKER-USER &> /dev/null; then
+		IPTABLES_CMD=iptables-nft
+	fi
+}
+
+function iptables_tj() {	
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		nsenter --net="$NETNS" -- iptables "$@"
+		nsenter --net="$NETNS" -- $IPTABLES_CMD "$@"
 	else
-		iptables "$@"
+		$IPTABLES_CMD "$@"
 	fi
 }
 
