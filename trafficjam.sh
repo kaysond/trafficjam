@@ -38,7 +38,7 @@ ERRCOUNT=0
 
 IPTABLES_CMD=iptables
 
-detect_iptables_version || continue
+detect_iptables_version
 
 if [[ -n "$SWARM_DAEMON" ]]; then
 	remove_service
