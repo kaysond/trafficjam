@@ -191,10 +191,15 @@ function get_local_load_balancer_ip() {
 }
 
 function iptables_tj() {
-	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		nsenter --net="$NETNS" -- iptables "$@"
+	if [ -z "$(iptables -L | grep DOCKER)" ]; then
+		iptables=iptables-nft
 	else
-		iptables "$@"
+		iptables=iptables
+	fi
+	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+		nsenter --net="$NETNS" -- $iptables "$@"
+	else
+		$iptables "$@"
 	fi
 }
 
