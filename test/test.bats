@@ -24,7 +24,7 @@
 }
 
 @test "Test the non-swarm environment with nftables" {
-	docker exec trafficjam_test bats /opt/trafficjam/test/test-dind.bats
+	docker exec trafficjam_test_nftables bats /opt/trafficjam/test/test-dind.bats
 }
 
 @test "Deploy the swarm environment" {
