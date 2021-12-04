@@ -19,6 +19,14 @@
 	docker exec trafficjam_test bats /opt/trafficjam/test/test-dind.bats
 }
 
+@test "Deploy the non-swarm environment with nftables" {
+	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml up -d
+}
+
+@test "Test the non-swarm environment with nftables" {
+	docker exec trafficjam_test_nftables bats /opt/trafficjam/test/test-dind.bats
+}
+
 @test "Deploy the swarm environment" {
 	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml up -d
 	docker exec swarm-manager docker swarm init
@@ -36,6 +44,7 @@
 
 function teardown_file() {
 	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose.yml down
+	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml down
 	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml down
 	docker image rm --force trafficjam_bats trafficjam_test
 }
