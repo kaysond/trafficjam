@@ -36,7 +36,7 @@ docker run -d --name trafficjam --cap-add NET_ADMIN --network host \
   -v "/var/run/docker.sock:/var/run/docker.sock" \
   --env NETWORK=traefik_public \
   --env WHITELIST_FILTER="ancestor=traefik:latest" \
-  --env TZ="America/Los_Angeles"
+  --env TZ="America/Los_Angeles" \
   kaysond/trafficjam
 ```
 
@@ -47,7 +47,7 @@ services:
   trafficjam:
     container_name: trafficjam
     image: kaysond/trafficjam
-  cap_add:
+    cap_add:
       - NET_ADMIN
     network_mode: host
     volumes:
@@ -122,7 +122,7 @@ TrafficJam is configured via several environment variables:
 * **DEBUG** - Setting this variable turns on debug logging
 
 ## Dependencies
-* Linux with iptables whose version matches the iptables in TrafficJam (currently `1.8.4 (legacy)`)
+* Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.7 (legacy)` or `1.8.7 (nf_tables)`)
 * Docker >20.10.0
 
 ## Technical Details
