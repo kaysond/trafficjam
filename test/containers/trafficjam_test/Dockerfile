@@ -1,4 +1,4 @@
-FROM docker:20.10.10-dind
+FROM docker:20.10.11-dind
 
 ARG BATS_VER=v1.2.1
 ARG DOCKER_COMPOSE_VER=v2.0.1

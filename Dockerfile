@@ -1,4 +1,4 @@
-FROM docker
+FROM docker:20.10.11
 
 RUN apk add --no-cache bash iproute2 iptables tzdata
 
