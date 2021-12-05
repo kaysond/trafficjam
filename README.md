@@ -124,27 +124,3 @@ TrafficJam is configured via several environment variables:
 ## Dependencies
 * Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.7 (legacy)` or `1.8.7 (nf_tables)`)
 * Docker >20.10.0
-
-## Technical Details
-TrafficJam limits traffic between containers by adding the necessary iptables rules on the host. When Docker Swarm is in use, TrafficJam acts as a daemon that spawns a global mode service so that the rules are added to the correct network namespace on each host. This daemon-service method is also required because Docker Swarm employs a separate load balancer on each node whose IP address must be permitted to communicate to the subnet. Since each node (even a manager) is only aware of its own load balancer's IP address, the daemon must start the service, collect the reported load balancer IP addresses of all nodes, then update the service.
-
-First, TrafficJam queries the docker daemon to determine the specified network's subnet and the ID's of whitelisted containers. If Docker Swarm is in use, TrafficJam also determines the correct network namespace and load balancer IP on the host.
-
-TrafficJam then adds its own chain in the `filter` table called `TRAFFICJAM`. It also adds a jump rule to the `DOCKER-USER` chain (or `FORWARD` for Docker Swarm) to jump to this chain: `iptables -t filter -I <chain> -j TRAFFICJAM`
-
-Then, TrafficJam inserts several rules to the `TRAFFICJAM` chain in the `filter` table which are ultimately evaluated top to bottom:
-1. Accept already-established traffic whose source and destination are the network subnet - `iptables -t filter -I TRAFFICJAM -s $SUBNET -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
-2. Accept traffic from whitelisted containers destined for the network subnet (this requires one rule per container) - `iptables -t filter -I TRAFFICJAM -s "$IP" -d "$SUBNET" -j RETURN`
-3. (Docker Swarm only) Accept traffic from all load balancers (this requires one rule per node) - `iptables -t filter -I TRAFFICJAM -s "$LOAD_BALANCER_IP" -d "$SUBNET" -j RETURN`
-4. Drop traffic whose source and destination are the network subnet - `iptables -t filter -I TRAFFICJAM -s "$SUBNET" -d "$SUBNET" -j DROP`
-(Note that the script inserts the rules in reverse order since they're inserted to the top of the chain)
-
-Thus all traffic on the relevant subnet hits the `DROP` on Rule 4 except traffic initiated by the whitelisted containers (usually the reverse proxy).
-
-This alone is not sufficient to prevent inter-container communication, however. If a container has a port mapped to the host, other containers are still able to access it via the host ip address and the mapped port. This is because Rule 4 above only drops traffic within the subnet, not traffic to the outside, to allow containers to have internet access.
-
-This is blocked by another chain and set of rules. First, TrafficJam adds another chain in the `filter` table: `TRAFFICJAM_INPUT`. Then it adds a jump rule to the `INPUT` chain: `iptables -t filter -I input -j TRAFFICJAM_INPUT`. The `INPUT` chain is used here because the incoming packet is destined for an IP address assigned to the host and does not need to be forwarded.
-
-TrafficJam adds two rules to this new chain, again shown in final order:
-1. Accept already-established traffic whose source is the network subnet - `iptables -t filter -I TRAFFICJAM_INPUT -s $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN`
-2. Drop traffic whose source is the network subnet - `iptables -t filter -I TRAFFICJAM_INPUT -s "$SUBNET" -j DROP`
