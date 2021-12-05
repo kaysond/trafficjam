@@ -36,8 +36,6 @@ TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump
 
 ERRCOUNT=0
 
-IPTABLES_CMD=iptables
-
 detect_iptables_version
 
 if [[ -n "$SWARM_DAEMON" ]]; then
@@ -46,7 +44,7 @@ if [[ -n "$SWARM_DAEMON" ]]; then
 	while true; do
 		tj_sleep
 
-    	deploy_service || continue
+		deploy_service || continue
 
 		get_load_balancer_ips || continue
 
@@ -90,7 +88,8 @@ else
 
 			allow_whitelist_traffic || continue
 
-			remove_old_rules TRAFFICJAM; remove_old_rules TRAFFICJAM_INPUT || continue
+			remove_old_rules TRAFFICJAM || continue
+			remove_old_rules TRAFFICJAM_INPUT || continue
 
 			OLD_SUBNET="$SUBNET"
 
