@@ -12,6 +12,7 @@ services:
       POLL_INTERVAL: 1
       NETWORK: test_public
       WHITELIST_FILTER: ancestor=traefik:v2.3.7
+      ALLOW_HOST_TRAFFIC: "true"
       DEBUG: "true"
     cap_add:
       - NET_ADMIN
@@ -19,6 +20,8 @@ services:
   reverseproxy:
     container_name: traefik
     image: traefik:v2.3.7
+    ports:
+      - 80:80
     networks:
       public:
       private:

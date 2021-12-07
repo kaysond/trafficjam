@@ -12,39 +12,46 @@
 }
 
 @test "Deploy the non-swarm environment" {
-	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose.yml up -d
+skip
+	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
 }
 
 @test "Test the non-swarm environment" {
+skip
 	docker exec trafficjam_test bats /opt/trafficjam/test/test-dind.bats
 }
 
 @test "Deploy the non-swarm environment with nftables" {
-	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml up -d
+skip
+	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables up --detach
 }
 
 @test "Test the non-swarm environment with nftables" {
+skip
 	docker exec trafficjam_test_nftables bats /opt/trafficjam/test/test-dind.bats
 }
 
 @test "Deploy the swarm environment" {
-	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml up -d
+
+	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
 	docker exec swarm-manager docker swarm init
 	docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
 	docker exec swarm-manager docker stack deploy -c /opt/trafficjam/test/docker-compose-dind-swarm.yml test
 }
 
 @test "Test the swarm manager" {
+
 	docker exec swarm-manager bats /opt/trafficjam/test/test-dind-swarm.bats
 }
 
 @test "Test the swarm worker" {
+skip
 	docker exec swarm-worker bats /opt/trafficjam/test/test-dind-swarm.bats
 }
 
 function teardown_file() {
-	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose.yml down
-	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml down
-	docker-compose -f "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml down
+	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
+	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables down
+	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm down
 	docker image rm --force trafficjam_bats trafficjam_test
 }

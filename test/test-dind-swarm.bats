@@ -53,14 +53,14 @@ setup_file() {
 }
 
 @test "whoami containers are responsive" {
-	curl --silent --show-error --max-time 5 localhost:8000
-	curl --silent --show-error --max-time 5 localhost:8000
+	curl --verbose --max-time 5 localhost:8000
+	curl --verbose --max-time 5 localhost:8000
 
-	curl --silent --show-error --max-time 5 localhost:8001
-	curl --silent --show-error --max-time 5 localhost:8001
+	curl --verbose --max-time 5 localhost:8001
+	curl --verbose --max-time 5 localhost:8001
 
-	curl --silent --show-error --max-time 5 localhost:8002
-	curl --silent --show-error --max-time 5 localhost:8002
+	curl --verbose --max-time 5 localhost:8002
+	curl --verbose --max-time 5 localhost:8002
 }
 
 @test "whitelisted containers can communicate with all other containers on the specified network" {
@@ -70,17 +70,16 @@ setup_file() {
 	docker exec "$RP_ID" ping -c 2 -w 10 test_public1
 	docker exec "$RP_ID" ping -c 2 -w 10 test_public1
 
-	#docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public1:8000
-	#docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public1:8000
-
-	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
-	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000 || \
+	{ echo "first test"; docker ps; docker logs "$TJ_ID"; iptables -L; false; }
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000 || \
+	{ echo "second test"; docker ps; docker logs "$TJ_ID"; iptables -L; false; }
 
 	docker exec "$RP_ID" ping -c 2 -w 10 test_public2
 	docker exec "$RP_ID" ping -c 2 -w 10 test_public2
 
-	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public2:8000
-	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_public2:8000
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_public2:8000
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_public2:8000
 }
 
 @test "containers on the specified network can not communicate with one another" {
@@ -89,9 +88,9 @@ setup_file() {
 	run docker exec "$TPU1_ID" ping -c 2 -w 10 test_public2
 	[ "$status" -eq 1 ]
 
-	run docker exec "$TPU1_ID" curl --silent --show-error --max-time 5 test_public2:8000
+	run docker exec "$TPU1_ID" curl --verbose --max-time 5 test_public2:8000
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
-	run docker exec "$TPU1_ID" curl --silent --show-error --max-time 5 test_public2:8000
+	run docker exec "$TPU1_ID" curl --verbose --max-time 5 test_public2:8000
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
@@ -101,17 +100,17 @@ setup_file() {
 	run docker exec "$TPU2_ID" ping -c 2 -w 10 test_public1
 	[ "$status" -eq 1 ]
 
-	run docker exec "$TPU2_ID" curl --silent --show-error --max-time 5 test_public1:8000
+	run docker exec "$TPU2_ID" curl --verbose --max-time 5 test_public1:8000
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
-	run docker exec "$TPU2_ID" curl --silent --show-error --max-time 5 test_public1:8000
+	run docker exec "$TPU2_ID" curl --verbose --max-time 5 test_public1:8000
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
 @test "containers on the specified network can not communicate with others via host-mapped ports" {
-	run docker exec "$TPU1_ID" sh -c "curl --silent --show-error --max-time 5 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
+	run docker exec "$TPU1_ID" sh -c "curl --verbose --max-time 5 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 
-	run docker exec "$TPU1_ID" sh -c "curl --silent --show-error --max-time 5 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
+	run docker exec "$TPU1_ID" sh -c "curl --verbose --max-time 5 `ip route | grep default | awk '{ print $3 }'`:8002" #get to host via default gateway
 	[ "$status" -eq 7 -o "$status" -eq 28 ]
 }
 
@@ -122,6 +121,6 @@ setup_file() {
 	docker exec "$RP_ID" ping -c 2 -w 10 test_private1
 	docker exec "$RP_ID" ping -c 2 -w 10 test_private1
 
-	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_private1:8000
-	docker exec "$RP_ID" curl --silent --show-error --max-time 5 test_private1:8000
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_private1:8000
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_private1:8000
 }
