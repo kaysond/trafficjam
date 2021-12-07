@@ -112,7 +112,10 @@ services:
         constraints: ['node.role==manager']
 ```
 
-**Note:** Docker Swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
+**Notes:** 
+Docker Swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
+
+`trafficjam` requires the `NET_ADMIN` Linux capability in order to manipulate `iptables` rules. For Docker Swarm setups, `SYS_ADMIN` is also required in order to enter namespaces, though the setting of container capabilities is automatically handled by the `trafficjam` swarm daemon.
 
 ## Configuration
 TrafficJam is configured via several environment variables:
@@ -139,7 +142,6 @@ Example:
     --env WHITELIST_FILTER=ancestor=container_name \
     --volume "/var/run/docker.sock:/var/run/docker.sock" \
     --cap-add NET_ADMIN \
-    --cap-add SYS_ADMIN \
     --network host \
     kaysond/trafficjam --clear
 ```

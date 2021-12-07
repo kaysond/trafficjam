@@ -62,6 +62,7 @@ function deploy_service() {
 				--env WHITELIST_FILTER="$WHITELIST_FILTER" \
 				--env DEBUG="$DEBUG" \
 				--cap-add NET_ADMIN \
+				--cap-add SYS_ADMIN \
 				--mode global \
 				--restart-condition on-failure \
 				--network host \
