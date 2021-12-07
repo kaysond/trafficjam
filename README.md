@@ -118,9 +118,12 @@ TrafficJam is configured via several environment variables:
 * **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service
 * **SWARM_IMAGE** - The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
 * **POLL_INTERVAL** - How often TrafficJam checks Docker for changes
-* **ALLOW_HOST_TRAFFIC** - Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [Technical Details](#technical-details) for more information).
+* **ALLOW_HOST_TRAFFIC** - Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [ARCHITECTURE.md](ARCHITECTURE.md)). Note that if this setting is enabled while old rules exist, some will not be cleared automatically and must be done so manually (See [Clearing Rules](#clearing-rules)).
 * **DEBUG** - Setting this variable turns on debug logging
 
 ## Dependencies
 * Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.7 (legacy)` or `1.8.7 (nf_tables)`)
 * Docker >20.10.0
+
+## Clearing Rules
+`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the `NETWORK` and `WHITELIST_FILTER` environment variables must be set appropriately so `trafficjam` can remove the correct rules.

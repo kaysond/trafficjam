@@ -34,10 +34,23 @@ TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump
 
 . trafficjam-functions.sh
 
-ERRCOUNT=0
-
 detect_iptables_version
 
+if [[ "${1:-}" == "--clear" ]]; then
+	get_network_driver
+
+	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+		get_netns
+	fi
+
+	DATE=$(date "+%Y-%m-%d %H:%M:%S")
+	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit 
+	remove_old_rules TRAFFICJAM_INPUT || true 
+
+	exit 0
+fi
+
+ERRCOUNT=0
 if [[ -n "$SWARM_DAEMON" ]]; then
 	remove_service
 
@@ -73,6 +86,7 @@ else
 				get_netns || continue
 				get_local_load_balancer_ip || continue
 			fi
+
 			add_chain || continue
 
 			block_subnet_traffic  || continue
@@ -89,7 +103,10 @@ else
 			allow_whitelist_traffic || continue
 
 			remove_old_rules TRAFFICJAM || continue
-			remove_old_rules TRAFFICJAM_INPUT || continue
+
+			if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
+				remove_old_rules TRAFFICJAM_INPUT || continue
+			fi
 
 			OLD_SUBNET="$SUBNET"
 
