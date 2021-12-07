@@ -32,11 +32,15 @@ TrafficJam works by adding some firewall (`iptables`) rules to the docker networ
 ### Vanilla Docker
 `docker-cli`:
 ```
-docker run -d --name trafficjam --cap-add NET_ADMIN --network host \
-  -v "/var/run/docker.sock:/var/run/docker.sock" \
+docker run \
+  --name trafficjam \
+  --cap-add NET_ADMIN \
+  --network host \
+  --volume "/var/run/docker.sock:/var/run/docker.sock" \
   --env NETWORK=traefik_public \
   --env WHITELIST_FILTER="ancestor=traefik:latest" \
   --env TZ="America/Los_Angeles" \
+  --detach \
   kaysond/trafficjam
 ```
 
@@ -126,4 +130,16 @@ TrafficJam is configured via several environment variables:
 * Docker >20.10.0
 
 ## Clearing Rules
-`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the `NETWORK` and `WHITELIST_FILTER` environment variables must be set appropriately so `trafficjam` can remove the correct rules.
+`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the `NETWORK` and `WHITELIST_FILTER` environment variables must be set appropriately so `trafficjam` can remove the correct rules, and the host docker socket must be mounted within the container.
+
+Example:
+```
+  docker run \
+    --env NETWORK=network_name \
+    --env WHITELIST_FILTER=ancestor=container_name \
+    --volume "/var/run/docker.sock:/var/run/docker.sock" \
+    --cap-add NET_ADMIN \
+    --cap-add SYS_ADMIN \
+    --network host \
+    kaysond/trafficjam --clear
+```

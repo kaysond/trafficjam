@@ -29,7 +29,7 @@ function log_debug() {
 
 function detect_iptables_version() {
 	IPTABLES_CMD=iptables
-	if iptables-nft --list DOCKER-USER &> /dev/null; then
+	if iptables-nft --numeric --list DOCKER-USER &> /dev/null; then
 		IPTABLES_CMD=iptables-nft
 	fi
 }
@@ -62,7 +62,6 @@ function deploy_service() {
 				--env WHITELIST_FILTER="$WHITELIST_FILTER" \
 				--env DEBUG="$DEBUG" \
 				--cap-add NET_ADMIN \
-				--cap-add SYS_ADMIN \
 				--mode global \
 				--restart-condition on-failure \
 				--network host \
@@ -207,7 +206,7 @@ function iptables_tj() {
 
 function add_chain() {
 	local RESULT
-	if ! iptables_tj --table filter --list TRAFFICJAM >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >& /dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM 2>&1); then
 			log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
 			return 1
@@ -223,7 +222,7 @@ function add_chain() {
 		CHAIN="DOCKER-USER"
 	fi
 
-	if ! iptables_tj --table filter --list "$CHAIN" | grep "TRAFFICJAM" >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list "$CHAIN" | grep "TRAFFICJAM" >& /dev/null; then
 		if ! RESULT=$(iptables_tj --table filter --insert "$CHAIN" --jump TRAFFICJAM 2>&1); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
@@ -245,7 +244,7 @@ function block_subnet_traffic() {
 
 function add_input_chain() {
 	local RESULT
-	if ! iptables_tj --table filter --list TRAFFICJAM_INPUT >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list TRAFFICJAM_INPUT >& /dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding chain TRAFFICJAM_INPUT: $RESULT"
 			return 1
@@ -253,7 +252,7 @@ function add_input_chain() {
 			log "Added chain: TRAFFICJAM_INPUT"
 		fi
 	fi
-	if ! iptables_tj --table filter --list INPUT | grep "TRAFFICJAM_INPUT" >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list INPUT | grep "TRAFFICJAM_INPUT" >& /dev/null; then
 		if ! RESULT=$(iptables_tj --table filter --insert INPUT --jump TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
@@ -326,7 +325,7 @@ function remove_old_rules() {
 	local RESULT
 	local RULES
 
-	if ! RULES=$(iptables_tj --line-numbers --table filter --list "$1" 2>&1); then
+	if ! RULES=$(iptables_tj --line-numbers --table filter --numeric --list "$1" 2>&1); then
 		log_error "Could not get rules from chain '$1' for removal: $RULES"
 		return 1
 	fi
@@ -338,7 +337,7 @@ function remove_old_rules() {
 			if ! RESULT=$(iptables_tj --table filter --delete "$1" "$RULENUM" 2>&1); then
 				log_error "Could not remove $1 rule: $RESULT"
 			else
-				RULE=$(iptables_tj --table filter --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
+				RULE=$(iptables_tj --table filter --numeric --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
 				log "Removed $1 rule: $RULE"
 			fi
 		done

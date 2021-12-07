@@ -29,6 +29,7 @@ if [[ -n "$TZ" ]]; then
 	cp /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
 fi
 
+ERRCOUNT=0
 #CRC32 without packages
 TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
 
@@ -37,7 +38,7 @@ TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump
 detect_iptables_version
 
 if [[ "${1:-}" == "--clear" ]]; then
-	get_network_driver
+	get_network_driver || NETWORK_DRIVER=local
 
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 		get_netns
@@ -50,7 +51,6 @@ if [[ "${1:-}" == "--clear" ]]; then
 	exit 0
 fi
 
-ERRCOUNT=0
 if [[ -n "$SWARM_DAEMON" ]]; then
 	remove_service
 
