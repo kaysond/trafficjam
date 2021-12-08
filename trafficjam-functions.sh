@@ -335,10 +335,10 @@ function remove_old_rules() {
 		log "No old rules to remove from chain '$1'"
 	else
 		for RULENUM in $RULENUMS; do
+			RULE=$(iptables_tj --table filter --numeric --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
 			if ! RESULT=$(iptables_tj --table filter --delete "$1" "$RULENUM" 2>&1); then
-				log_error "Could not remove $1 rule: $RESULT"
+				log_error "Could not remove $1 rule \"$RULE\": $RESULT"
 			else
-				RULE=$(iptables_tj --table filter --numeric --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
 				log "Removed $1 rule: $RULE"
 			fi
 		done
