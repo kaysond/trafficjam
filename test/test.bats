@@ -29,9 +29,11 @@
 
 @test "Deploy the swarm environment" {
 	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
-	sleep 5 #Wait for the daemons to start
+	sleep 5
 	docker exec swarm-manager docker swarm init
 	docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
+	sleep 5
+	docker exec swarm-manager docker stack deploy -c /opt/trafficjam/test/docker-compose-dind-swarm.yml test
 }
 
 @test "Test the swarm manager" {
