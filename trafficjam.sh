@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-if [[ -z "${NETWORK:-}" ]]; then
-	echo "NETWORK is not set" >&2
-	exit 1
-fi
+if [[ "${1:-}" != "--clear" ]]; then
+	if [[ -z "${NETWORK:-}" ]]; then
+		echo "NETWORK is not set" >&2
+		exit 1
+	fi
 
-if [[ -z "${WHITELIST_FILTER:-}" ]]; then
-	echo "WHITELIST_FILTER is not set" >&2
-	exit 1
+	if [[ -z "${WHITELIST_FILTER:-}" ]]; then
+		echo "WHITELIST_FILTER is not set" >&2
+		exit 1
+	fi
 fi
 
 #Initialize variables since we set -u
@@ -37,7 +39,7 @@ fi
 
 . trafficjam-functions.sh
 
-trap tj_trap SIGTERM EXIT
+trap tj_trap EXIT
 
 ERRCOUNT=0
 

@@ -94,8 +94,6 @@ setup_file() {
 
 @test "clearing rules with a command works properly" {
 	docker run \
-		--env NETWORK=foo \
-		--env WHITELIST_FILTER=bar \
 		--volume "/var/run/docker.sock:/var/run/docker.sock" \
 		--cap-add NET_ADMIN \
 		--network host \

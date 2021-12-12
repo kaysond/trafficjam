@@ -134,8 +134,8 @@ TrafficJam is configured via several environment variables:
 * Docker >20.10.0
 
 ## Clearing Rules
-`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the host docker socket must be mounted within the container, and `NETWORK` and `WHITELIST_FILTER` must be set so the container doesn't exit. The rules can also be cleared by sending the `SIGUSR1` signal to the container. This will cause `trafficjam` to exit.
+`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the host docker socket must be mounted within the container. The rules can also be cleared by sending the `SIGUSR1` signal to the container. This will cause `trafficjam` to exit.
 
 Examples:
-* `docker run --env NETWORK=foo --env WHITELIST_FILTER=bar --volume "/var/run/docker.sock:/var/run/docker.sock" --cap-add NET_ADMIN --network host kaysond/trafficjam --clear`
+* `docker run --volume "/var/run/docker.sock:/var/run/docker.sock" --cap-add NET_ADMIN --network host kaysond/trafficjam --clear`
 * `docker kill --signal SIGUSR1 trafficjam`

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 function tj_trap() {
+	log_debug "Trapping signal"
 	if [[ -n "$SWARM_DAEMON" ]]; then
 		remove_service || exit 1
 	fi
@@ -63,13 +64,13 @@ function remove_service() {
 	local ID
 	if ID=$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID") && [ -n "$ID" ]; then
 		local RESULT
-		if ! RESULT=$(docker rm "$ID" 2>&1); then
+		if ! RESULT=$(docker service rm "$ID" 2>&1); then
 			log_error "Unexpected error while removing existing service: $RESULT"
 		else
 			log "Removed service $ID: $RESULT"
 		fi
 	else
-		log_debug "No existing service found on startup"
+		log_debug "No existing service found to remove"
 	fi
 }
 
