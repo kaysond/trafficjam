@@ -44,6 +44,13 @@
 	docker exec swarm-worker bats /opt/trafficjam/test/test-dind-swarm.bats
 }
 
+@test "killing the swarm daemon removes the service" {
+	docker exec swarm-manager docker service rm test_trafficjam
+	sleep 5
+	run bash -c "docker exec swarm-manager docker service ls | grep trafficjam_DEFAULT"
+	[ "$status" -eq 1 ]
+}
+
 function teardown_file() {
 	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
 	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables down

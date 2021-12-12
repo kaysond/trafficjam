@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
 
 if [[ -z "${NETWORK:-}" ]]; then
@@ -12,6 +12,7 @@ if [[ -z "${WHITELIST_FILTER:-}" ]]; then
 fi
 
 #Initialize variables since we set -u
+INSTANCE_ID="${INSTANCE_ID:-DEFAULT}"
 SWARM_DAEMON="${SWARM_DAEMON:-}"
 SWARM_IMAGE="${SWARM_IMAGE:-kaysond/trafficjam}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
@@ -29,26 +30,23 @@ if [[ -n "$TZ" ]]; then
 	cp /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
 fi
 
-ERRCOUNT=0
-#CRC32 without packages
-TJINSTANCE=$(echo -n "$NETWORK $WHITELIST_FILTER" | gzip -c | tail -c8 | hexdump -n4 -e '"%08X"')
+if [[ "$INSTANCE_ID" =~ [^a-zA-Z0-9_] ]]; then
+	echo "INSTANCE_ID contains invalid characters" >&2
+	exit 1
+fi
 
 . trafficjam-functions.sh
 
+trap tj_trap SIGTERM EXIT
+
+ERRCOUNT=0
+
 detect_iptables_version
 
+trap clear_rules SIGUSR1
+
 if [[ "${1:-}" == "--clear" ]]; then
-	get_network_driver || NETWORK_DRIVER=local
-
-	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		get_netns
-	fi
-
-	DATE=$(date "+%Y-%m-%d %H:%M:%S")
-	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit 
-	remove_old_rules TRAFFICJAM_INPUT || true 
-
-	exit 0
+	clear_rules
 fi
 
 if [[ -n "$SWARM_DAEMON" ]]; then

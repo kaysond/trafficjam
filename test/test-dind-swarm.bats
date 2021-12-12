@@ -22,19 +22,19 @@ setup_file() {
 				ERRORS=("${ERRORS[@]}" "Containers aren't started" "$(docker ps)")
 			fi
 
-			if docker service ls | grep -q trafficjam_FDB2E498; then
+			if docker service ls | grep -q trafficjam_DEFAULT; then
 				#Two trafficjam tasks exist with LOAD_BALANCER_IPS env vars set
-				if [[ "$(docker inspect --format '{{ .Spec.ContainerSpec.Env }}' $(docker service ps --quiet --filter desired-state=running trafficjam_FDB2E498) | \
+				if [[ "$(docker inspect --format '{{ .Spec.ContainerSpec.Env }}' $(docker service ps --quiet --filter desired-state=running trafficjam_DEFAULT) | \
 						grep -cE 'LOAD_BALANCER_IPS=172\.23\.0\.[[:digit:]]{1,3} 172\.23\.0\.[[:digit:]]{1,3}')" != "2" ]]; then
 					READY=""
-					ERRORS=("${ERRORS[@]}" "trafficjam tasks aren't ready" "$(docker inspect --format '{{ .Spec.ContainerSpec.Env }}' $(docker service ps --quiet --filter desired-state=running trafficjam_FDB2E498))")
+					ERRORS=("${ERRORS[@]}" "trafficjam tasks aren't ready" "$(docker inspect --format '{{ .Spec.ContainerSpec.Env }}' $(docker service ps --quiet --filter desired-state=running trafficjam_DEFAULT))")
 				fi
 			
 				#All rules are added on both running trafficjam tasks
-				for TASKID in $(docker service ps trafficjam_FDB2E498 | grep Running | cut -d' ' -f1); do
-					if [[ "$(docker service logs trafficjam_FDB2E498 | grep "$TASKID" | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6 | grep -c 'DEBUG: Error Count: 0')" != "2" ]]; then
+				for TASKID in $(docker service ps trafficjam_DEFAULT | grep Running | cut -d' ' -f1); do
+					if [[ "$(docker service logs trafficjam_DEFAULT | grep "$TASKID" | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6 | grep -c 'DEBUG: Error Count: 0')" != "2" ]]; then
 						READY=""
-						ERRORS=("${ERRORS[@]}" "rules are not added on task $TASKID" "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_FDB2E498') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6)")
+						ERRORS=("${ERRORS[@]}" "rules are not added on task $TASKID" "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_DEFAULT') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6)")
 					fi
 				done
 			else
@@ -60,7 +60,7 @@ setup_file() {
 		done
 	fi
 	export RP_ID=$(docker ps --quiet --filter 'name=test_reverseproxy')
-	export TJ_ID=$(docker ps --quiet --filter 'name=trafficjam_FDB2E498')
+	export TJ_ID=$(docker ps --quiet --filter 'name=trafficjam_DEFAULT')
 	export TPU1_ID=$(docker ps --quiet --filter 'name=test_public1')
 	export TPU2_ID=$(docker ps --quiet --filter 'name=test_public2')
 	export TPR1_ID=$(docker ps --quiet --filter 'name=test_private1')
@@ -69,7 +69,7 @@ setup_file() {
 
 @test "whitelisted containers can communicate with all other containers on the specified network" {
 	#Each is run twice to hit both nodes
-	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000 || { docker service logs trafficjam_FDB2E498; docker service logs test_public1; exit 1; }
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000 || { docker service logs trafficjam_DEFAULT; docker service logs test_public1; exit 1; }
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
 
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public2:8000

@@ -122,6 +122,7 @@ TrafficJam is configured via several environment variables:
 * **NETWORK** - The name of the Docker network this instance of TrafficJam should manage (multiple instances can be run for different networks)
 * **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
 * **TZ** - Timezone (for logging)
+* **INSTANCE_ID** - A unique alphanumeric instance ID that is required to run multiple instances of trafficjam
 * **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service
 * **SWARM_IMAGE** - The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
 * **POLL_INTERVAL** - How often TrafficJam checks Docker for changes
@@ -133,15 +134,8 @@ TrafficJam is configured via several environment variables:
 * Docker >20.10.0
 
 ## Clearing Rules
-`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the `NETWORK` and `WHITELIST_FILTER` environment variables must be set appropriately so `trafficjam` can remove the correct rules, and the host docker socket must be mounted within the container.
+`trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the host docker socket must be mounted within the container, and `NETWORK` and `WHITELIST_FILTER` must be set so the container doesn't exit. The rules can also be cleared by sending the `SIGUSR1` signal to the container. This will cause `trafficjam` to exit.
 
-Example:
-```
-  docker run \
-    --env NETWORK=network_name \
-    --env WHITELIST_FILTER=ancestor=container_name \
-    --volume "/var/run/docker.sock:/var/run/docker.sock" \
-    --cap-add NET_ADMIN \
-    --network host \
-    kaysond/trafficjam --clear
-```
+Examples:
+* `docker run --env NETWORK=foo --env WHITELIST_FILTER=bar --volume "/var/run/docker.sock:/var/run/docker.sock" --cap-add NET_ADMIN --network host kaysond/trafficjam --clear`
+* `docker kill --signal SIGUSR1 trafficjam`

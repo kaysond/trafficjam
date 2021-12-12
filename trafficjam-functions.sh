@@ -1,4 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+function tj_trap() {
+	if [[ -n "$SWARM_DAEMON" ]]; then
+		remove_service || exit 1
+	fi
+	exit 0
+}
+
 function tj_sleep() {
 	#Slow logging on errors
 	log_debug "Error Count: $ERRCOUNT"
@@ -8,6 +15,7 @@ function tj_sleep() {
 		SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
 	fi
 
+	# This pattern, along with the trap above, allows for quick script exits
 	sleep "${SLEEP_TIME}s" &
 	wait $!
 }
@@ -34,9 +42,26 @@ function detect_iptables_version() {
 	fi
 }
 
+function clear_rules() {
+	if [[ -z "${NETWORK_DRIVER:-}" ]]; then
+		get_network_driver || NETWORK_DRIVER=local
+	fi
+
+
+	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+		get_netns
+	fi
+
+	DATE=$(date "+%Y-%m-%d %H:%M:%S")
+	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit 
+	remove_old_rules TRAFFICJAM_INPUT || true 
+
+	exit 0
+}
+
 function remove_service() {
 	local ID
-	if ID=$(docker service ls --quiet --filter "label=trafficjam.id=$TJINSTANCE") && [ -n "$ID" ]; then
+	if ID=$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID") && [ -n "$ID" ]; then
 		local RESULT
 		if ! RESULT=$(docker rm "$ID" 2>&1); then
 			log_error "Unexpected error while removing existing service: $RESULT"
@@ -49,11 +74,11 @@ function remove_service() {
 }
 
 function deploy_service() {
-	if ! docker inspect "$(docker service ls --quiet --filter "label=trafficjam.id=$TJINSTANCE")" &> /dev/null; then
+	if ! docker inspect "$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID")" &> /dev/null; then
 		if ! SERVICE_ID=$(docker service create \
 				--quiet \
 				--detach \
-				--name "trafficjam_$TJINSTANCE" \
+				--name "trafficjam_$INSTANCE_ID" \
 				--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
 				--mount type=bind,source=/var/run/docker/netns,destination=/var/run/netns \
 				--env TZ="$TZ" \
@@ -66,7 +91,7 @@ function deploy_service() {
 				--mode global \
 				--restart-condition on-failure \
 				--network host \
-				--label trafficjam.id="$TJINSTANCE" \
+				--label trafficjam.id="$INSTANCE_ID" \
 				"$SWARM_IMAGE" 2>&1
 			); then
 			log_error "Unexpected error while deploying service: $SERVICE_ID"
@@ -75,7 +100,7 @@ function deploy_service() {
 			#docker service create may print warnings to stderr even if it succeeds
 			#particularly due to the trafficjam image not being accessible in a registry during CI
 			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1) 
-			log "Created service trafficjam_$TJINSTANCE: $SERVICE_ID"
+			log "Created service trafficjam_$INSTANCE_ID: $SERVICE_ID"
 		fi
 	else
 		log_debug "Existing service found, not deploying"
@@ -235,7 +260,7 @@ function add_chain() {
 
 function block_subnet_traffic() {
 	local RESULT
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --jump DROP --match comment --comment "trafficjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting subnet blocking rule: $RESULT"
 		return 1
 	else
@@ -266,7 +291,7 @@ function add_input_chain() {
 function block_host_traffic() {
 	local RESULT
 	#Drop local socket-bound packets coming from the target subnet
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --jump DROP --match comment --comment "trafficjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		return 1
 	else
@@ -274,7 +299,7 @@ function block_host_traffic() {
 	fi
 
 	#But allow them if the connection was initiated by the host
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam-$TJINSTANCE $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		return 1
 	else
@@ -288,7 +313,7 @@ function allow_load_balancer_traffic() {
 	fi
 
 	for LOAD_BALANCER_IP in ${LOAD_BALANCER_IPS}; do
-		if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam-$TJINSTANCE $DATE"); then
+		if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE"); then
 			log_error "Unexpected error while setting load balancer allow rule: $RESULT"
 			return 1
 		else
@@ -305,7 +330,7 @@ function allow_whitelist_traffic() {
 			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
 			return 1
 		else
-			if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam-$TJINSTANCE $DATE"); then
+			if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE"); then
 				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 				return 1
 			else
@@ -313,7 +338,7 @@ function allow_whitelist_traffic() {
 			fi
 		fi
 	done
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam-$TJINSTANCE $DATE"); then
+	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE"); then
 		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 		return 1
 	else
@@ -331,7 +356,7 @@ function remove_old_rules() {
 		return 1
 	fi
 	#Make sure to reverse sort rule numbers othwerise the numbers change!
-	if ! RULENUMS=$(echo "$RULES" | grep "trafficjam-$TJINSTANCE" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
+	if ! RULENUMS=$(echo "$RULES" | grep "trafficjam_$INSTANCE_ID" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
 		log "No old rules to remove from chain '$1'"
 	else
 		for RULENUM in $RULENUMS; do

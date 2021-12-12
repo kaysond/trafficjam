@@ -61,20 +61,18 @@ setup_file() {
 	docker exec traefik curl --verbose --max-time 5 private1:8000
 }
 
-@test "clear rules" {
-	docker-compose -f /opt/trafficjam/test/docker-compose-dind.yml down
-	docker run \
-		--env NETWORK=test_public \
-		--env WHITELIST_FILTER=ancestor=traefik:v2.3.7 \
-		--volume "/var/run/docker.sock:/var/run/docker.sock" \
-		--cap-add NET_ADMIN \
-		--network host \
-		trafficjam --clear
-	iptables -L TRAFFICJAM
-	[ "$(iptables -L TRAFFICJAM | wc -l)" -eq 2 ]
+@test "clearing rules with SIGUSR1 works properly" {
+	docker kill --signal SIGUSR1 trafficjam
+	sleep 5
+	run bash -c "docker ps | grep trafficjam"
+	[ "$status" -eq 1 ]
+	[ "$(iptables --numeric --list TRAFFICJAM | wc -l)" -eq 2 ]
+	[ "$(iptables --numeric --list TRAFFICJAM_INPUT | wc -l)" -eq 2 ]
 }
 
 @test "deploy with ALLOW_HOST_TRAFFIC" {
+	docker-compose -f /opt/trafficjam/test/docker-compose-dind.yml down
+	sleep 5
 	docker-compose -f /opt/trafficjam/test/docker-compose-dind-allowhost.yml up -d
 }
 
@@ -92,4 +90,17 @@ setup_file() {
 	docker exec public2 curl --verbose --max-time 5 "$HOST_IP":80
 	docker exec public2 curl --verbose --max-time 5 "$HOST_IP":8000
 	docker exec public2 curl --verbose --max-time 5 "$HOST_IP":8001
+}
+
+@test "clearing rules with a command works properly" {
+	docker run \
+		--env NETWORK=foo \
+		--env WHITELIST_FILTER=bar \
+		--volume "/var/run/docker.sock:/var/run/docker.sock" \
+		--cap-add NET_ADMIN \
+		--network host \
+		trafficjam --clear
+	iptables --numeric --list
+	[ "$(iptables --numeric --list TRAFFICJAM | wc -l)" -eq 2 ]
+	[ "$(iptables --numeric --list TRAFFICJAM_INPUT | wc -l)" -eq 2 ]
 }
