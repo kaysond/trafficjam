@@ -1,6 +1,7 @@
 setup_file() {
 	if iptables -t filter -L | grep -q trafficjam; then
-		echo "Found existing trafficjam rules" >&2 && exit 1
+		echo "Found existing trafficjam rules" >&2
+		exit 1
 	fi
 	#Wait for images to finish building on container startup for 60s
 	while ! docker image ls | grep -q whoami; do

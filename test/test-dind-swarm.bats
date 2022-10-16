@@ -25,14 +25,14 @@ setup_file() {
 			if docker service ls | grep -q trafficjam_DEFAULT; then
 				#Two trafficjam tasks exist with LOAD_BALANCER_IPS env vars set
 				if [[ "$(docker inspect --format '{{ .Spec.ContainerSpec.Env }}' $(docker service ps --quiet --filter desired-state=running trafficjam_DEFAULT) | \
-						grep -cE 'LOAD_BALANCER_IPS=172\.23\.0\.[[:digit:]]{1,3} 172\.23\.0\.[[:digit:]]{1,3}')" != "2" ]]; then
+						grep -cE 'ALLOWED_SWARM_IPS=172\.23\.0\.[[:digit:]]{1,3} 172\.23\.0\.[[:digit:]]{1,3} 172\.23\.0\.[[:digit:]]{1,3} 172\.23\.0\.[[:digit:]]{1,3}')" != "2" ]]; then
 					READY=""
 					ERRORS=("${ERRORS[@]}" "trafficjam tasks aren't ready" "$(docker inspect --format '{{ .Spec.ContainerSpec.Env }}' $(docker service ps --quiet --filter desired-state=running trafficjam_DEFAULT))")
 				fi
 			
 				#All rules are added on both running trafficjam tasks
-				for TASKID in $(docker service ps trafficjam_DEFAULT | grep Running | cut -d' ' -f1); do
-					if [[ "$(docker service logs trafficjam_DEFAULT | grep "$TASKID" | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6 | grep -c 'DEBUG: Error Count: 0')" != "2" ]]; then
+				for TASKID in $(docker service ps --quiet --filter desired-state=running trafficjam_DEFAULT); do
+					if [[ "$(docker service logs --tail 30 trafficjam_DEFAULT | grep "${TASKID:0:9}" | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 11 | grep -c 'DEBUG: Error Count: 0')" != "2" ]]; then
 						READY=""
 						ERRORS=("${ERRORS[@]}" "rules are not added on task $TASKID" "$(docker logs $(docker ps --quiet --filter 'name=trafficjam_DEFAULT') | awk -F']' '{ print $2 }' | grep -v Whitelisted | tail -n 6)")
 					fi
@@ -50,7 +50,7 @@ setup_file() {
 				ERRORS=("${ERRORS[@]}" "whoami services aren't ready" "$(docker service ls)" "$(docker service ps test_public1)" "$(docker service ps test_public2)" "$(docker service ps test_private1)" )
 			fi
 
-			if (( i >= LIMIT )); then
+			if (( ++i >= LIMIT )); then
 				echo "Timed out waiting for swarm state to converge" >&2
 				IFS='\n'
 				echo -e "${ERRORS[@]}" >&2
@@ -68,12 +68,21 @@ setup_file() {
 }
 
 @test "whitelisted containers can communicate with all other containers on the specified network" {
-	#Each is run twice to hit both nodes
-	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000 || { docker service logs trafficjam_DEFAULT; docker service logs test_public1; exit 1; }
+	# Each is run twice to hit both nodes
+	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public1:8000
 
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public2:8000
 	docker exec "$RP_ID" curl --verbose --max-time 5 test_public2:8000
+
+	# Also hit the containers by interface IP
+	# This only works on the manager
+	if docker node ls &> /dev/null; then
+		IPS="$(docker inspect --format '{{ (index (index .NetworksAttachments 1).Addresses 0) }}' $(docker service ps --quiet --filter desired-state=running test_public1 test_public2) | sed 's#/24$##')"
+		for IP in $IPS; do
+			docker exec "$RP_ID" curl --verbose --max-time 5 "$IP:8000"
+		done
+	fi
 }
 
 @test "containers on the specified network can not communicate with one another" {

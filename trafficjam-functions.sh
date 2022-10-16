@@ -62,7 +62,7 @@ function clear_rules() {
 
 function remove_service() {
 	local ID
-	if ID=$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID") && [ -n "$ID" ]; then
+	if ID=$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID") && [[ -n "$ID" ]]; then
 		local RESULT
 		if ! RESULT=$(docker service rm "$ID" 2>&1); then
 			log_error "Unexpected error while removing existing service: $RESULT"
@@ -108,7 +108,7 @@ function deploy_service() {
 	fi
 }
 
-function get_load_balancer_ips() {
+function get_allowed_swarm_ips() {
 	local RESULT
 	if ! RESULT=$(docker service inspect --format '{{ if .UpdateStatus }}{{ .UpdateStatus.State }}{{ end }}' "$SERVICE_ID" 2>&1); then
 		log_error "Unexpected error while getting service update state: $RESULT"
@@ -121,34 +121,43 @@ function get_load_balancer_ips() {
 			return 1
 		fi
 		local SERVICE_LOGS
-		if ! SERVICE_LOGS=$(docker service logs "$SERVICE_ID" 2>&1); then
+		if ! SERVICE_LOGS=$(docker service logs --timestamps --since "$SERVICE_LOGS_SINCE" "$SERVICE_ID" 2>&1); then
 			log_error "Unexpected error while retrieving service logs: $SERVICE_LOGS"
 			return 1
 		fi
-		#This mess searches the service logs for running containers' "lbip:" output
+		# We have to only grab the latest log entries because of https://github.com/moby/moby/issues/38640
+		SERVICE_LOGS_SINCE=$(tail -n1 <<< "$SERVICE_LOGS" | cut -d ' ' -f 1)
+
+		#This mess searches the service logs for running containers' "#WHITELIST_IPS#" output
 		#and saves the most recent output from each container into the variable
-		if ! LOAD_BALANCER_IPS=$({ printf '%s' "$SERVICE_LOGS" | \
+		if ! ALLOWED_SWARM_IPS=$({ printf '%s' "$SERVICE_LOGS" | \
 				grep -E "$(printf '(%s)' "$CONT_IDS" | tr '\n' '|')" | \
-				grep "lbip:" | \
-				awk '{ print $1" "$(NF) }' | \
+				grep -E "#WHITELIST_IPS#" | \
+				# reverse the lines
 				tac | \
-				awk '!a[$1]++ { print $2 }' | \
-				sed 's/lbip://' | \
-				sort -d | \
+ 				# only get the first (newest) log entry per container
+				awk '!a[$1]++ { print }' | \
+				# delete everything up to and including the tag
+				sed 's/^.*#WHITELIST_IPS#//' | \
+				# one IP per line
+				tr ' ' '\n' | \
+				sort -t . -d | \
+				uniq | \
+				# back to one line for nicer debug log output
 				tr '\n' ' '; } 2>&1); then
-			log_debug "No load balancer ips found"
-			LOAD_BALANCER_IPS="$OLD_LOAD_BALANCER_IPS"
+			log_debug "No swarm whitelist ips found"
+			ALLOWED_SWARM_IPS="$OLD_ALLOWED_SWARM_IPS"
 		else
-			log_debug "Load balancer IPs: $LOAD_BALANCER_IPS"
+			log_debug "Allowed Swarm IPs: $ALLOWED_SWARM_IPS"
 		fi
 	else
-		log_debug "Skipping load balancer ip check because service is still updating"
+		log_debug "Skipping swarm ip check because service is still updating"
 	fi
 }
 
 function update_service() {
 	local RESULT
-	if ! RESULT=$(docker service update --detach --env-add "LOAD_BALANCER_IPS=$LOAD_BALANCER_IPS" "$SERVICE_ID" 2>&1); then
+	if ! RESULT=$(docker service update --detach --env-add "ALLOWED_SWARM_IPS=$ALLOWED_SWARM_IPS" "$SERVICE_ID" 2>&1); then
 		log_error "Unexpected error while updating service: $RESULT"
 	else
 		log "Updated service $SERVICE_ID"
@@ -156,7 +165,7 @@ function update_service() {
 }
 
 function get_network_driver() {
-	if ! NETWORK_DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [ -z "$NETWORK_DRIVER" ]; then
+	if ! NETWORK_DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [[ -z "$NETWORK_DRIVER" ]]; then
 		log_error "Unexpected error while determining network driver: $NETWORK_DRIVER"
 		return 1
 	else
@@ -165,7 +174,7 @@ function get_network_driver() {
 }
 
 function get_network_subnet() {
-	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK" 2>&1) || [ -z "$SUBNET" ]; then
+	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK" 2>&1) || [[ -z "$SUBNET" ]]; then
 		log_error "Unexpected error while determining network subnet: $SUBNET"
 		return 1
 	else
@@ -173,16 +182,20 @@ function get_network_subnet() {
 	fi
 }
 
-function get_whitelisted_container_ids() {
-	if ! WHITELIST=$(docker ps --filter "$WHITELIST_FILTER" --filter network="$NETWORK" --format="{{.ID}}" 2>&1); then
-		log_error "Unexpected error while getting container IDs for filter '$WHITELIST_FILTER': $WHITELIST"
+function get_whitelisted_container_ips() {
+	local CONTAINER_IDS
+	if ! CONTAINER_IDS=$(docker ps --filter "$WHITELIST_FILTER" --filter network="$NETWORK" --format="{{ .ID }}" 2>&1) || [[ -z "$CONTAINER_IDS" ]]; then
+		log_error "Unexpected error while getting whitelist container IDs: $CONTAINER_IDS"
 		return 1
 	fi
-	if [[ -z "$WHITELIST" ]]; then
-		log_error "Retrieved empty ID for whitelisted containers"
+	log_debug "Whitelisted containers: $CONTAINER_IDS"
+
+	if ! WHITELIST_IPS=$(xargs docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" <<< "$CONTAINER_IDS" 2>&1) || [[ -z "$WHITELIST_IPS" ]]; then
+		log_error "Unexpected error while getting whitelisted container IPs: ${WHITELIST_IPS}"
 		return 1
 	fi
-	log_debug "Whitelisted containers: $WHITELIST"
+
+	log_debug "Whitelisted container IPs: $WHITELIST_IPS"
 }
 
 function get_netns() {
@@ -193,9 +206,6 @@ function get_netns() {
 		log_debug "ID of network $NETWORK is $NETWORK_ID"
 	fi
 
-	#if ! NETNS=$(ls /var/run/netns | grep -vE "^lb_" | grep "${NETWORK_ID:0:9}") || [ -z "$NETNS" ]; then
-	#shell check complains about the above due to ls | grep poorly handling non-alphanumeric filenames
-	#this may not actaully be an issue since they're all network namespaces
 	for f in /var/run/netns/*; do
 		case $(basename "$f") in
 			lb_*) true;;
@@ -214,13 +224,9 @@ function get_local_load_balancer_ip() {
 	if ! LOCAL_LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || [ -z "$LOCAL_LOAD_BALANCER_IP" ]; then
 		log_error "Could not retrieve load balancer IP for network $NETWORK"
 		return 1
-	else
-		log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
-		if [[ "$LOCAL_LOAD_BALANCER_IP" != "$OLD_LOCAL_LOAD_BALANCER_IP" ]]; then
-			log "lbip:$LOCAL_LOAD_BALANCER_IP"
-			OLD_LOCAL_LOAD_BALANCER_IP="$LOCAL_LOAD_BALANCER_IP"
-		fi
 	fi
+
+	log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
 }
 
 function iptables_tj() {	
@@ -308,38 +314,48 @@ function block_host_traffic() {
 	fi
 }
 
-function allow_load_balancer_traffic() {
-	if [[ -z "$LOAD_BALANCER_IPS" ]]; then
-		LOAD_BALANCER_IPS=$LOCAL_LOAD_BALANCER_IP
-	fi
-
-	for LOAD_BALANCER_IP in ${LOAD_BALANCER_IPS}; do
-		if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE"); then
-			log_error "Unexpected error while setting load balancer allow rule: $RESULT"
-			return 1
-		else
-			log "Added rule: --table filter --insert TRAFFICJAM --source $LOAD_BALANCER_IP --destination $SUBNET --jump RETURN"
-		fi
-	done
+function report_local_whitelist_ips() {
+	log "#WHITELIST_IPS#$WHITELIST_IPS $LOCAL_LOAD_BALANCER_IP"
 }
 
-function allow_whitelist_traffic() {
+function allow_local_load_balancer_traffic() {
+	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$LOCAL_LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+		log_error "Unexpected error while setting load balancer allow rule: $RESULT"
+		return 1
+	else
+		log "Added rule: --table filter --insert TRAFFICJAM --source $LOCAL_LOAD_BALANCER_IP --destination $SUBNET --jump RETURN"
+	fi
+}
+
+function allow_swarm_whitelist_traffic() {
+	if [[ -n "$ALLOWED_SWARM_IPS" ]]; then
+		for IP in $ALLOWED_SWARM_IPS; do
+			if ! grep -q "$IP" <<< "$WHITELIST_IPS" && ! grep -q "$IP" <<< "$LOCAL_LOAD_BALANCER_IP"; then
+				if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+					log_error "Unexpected error while setting allow swarm whitelist rule: $RESULT"
+					return 1
+				else
+					log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
+				fi
+			else
+				log_debug "$IP is local; skipping in swarm whitelist rules"
+			fi
+		done
+	fi
+}
+
+function allow_local_whitelist_traffic() {
 	local IP
 	local RESULT
-	for CONTID in $WHITELIST; do
-		if ! IP=$(docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" "$CONTID" 2>&1) || [ -z "$IP" ]; then
-			log_error "Unexpected error while determining container '$CONTID' IP address: $IP"
+	for IP in $WHITELIST_IPS; do
+		if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+			log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 			return 1
 		else
-			if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE"); then
-				log_error "Unexpected error while setting whitelist allow rule: $RESULT"
-				return 1
-			else
-				log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
-			fi
+			log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
 		fi
 	done
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE"); then
+	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 		return 1
 	else

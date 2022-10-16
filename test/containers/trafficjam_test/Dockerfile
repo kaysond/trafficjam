@@ -1,6 +1,6 @@
 FROM docker:20.10.11-dind
 
-ARG BATS_VER=v1.2.1
+ARG BATS_VER=v1.8.0
 ARG DOCKER_COMPOSE_VER=v2.0.1
 
 #Install Testing Dependencies

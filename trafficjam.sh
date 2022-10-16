@@ -14,19 +14,21 @@ if [[ "${1:-}" != "--clear" ]]; then
 fi
 
 #Initialize variables since we set -u
-INSTANCE_ID="${INSTANCE_ID:-DEFAULT}"
-SWARM_DAEMON="${SWARM_DAEMON:-}"
-SWARM_IMAGE="${SWARM_IMAGE:-kaysond/trafficjam}"
-POLL_INTERVAL="${POLL_INTERVAL:-5}"
-ALLOW_HOST_TRAFFIC="${ALLOW_HOST_TRAFFIC:-}"
-DEBUG="${DEBUG:-}"
-TZ="${TZ:-}"
+: "${INSTANCE_ID:=DEFAULT}"
+: "${SWARM_DAEMON:=}"
+: "${SWARM_IMAGE:=kaysond/trafficjam}"
+: "${POLL_INTERVAL:=5}"
+: "${ALLOW_HOST_TRAFFIC:=}"
+: "${DEBUG:=}"
+: "${TZ:=}"
 NETNS=""
 OLD_SUBNET=""
-OLD_WHITELIST=""
+OLD_WHITELIST_IPS=""
+LOCAL_LOAD_BALANCER_IP=""
 OLD_LOCAL_LOAD_BALANCER_IP=""
-LOAD_BALANCER_IPS="${LOAD_BALANCER_IPS:-}"
-OLD_LOAD_BALANCER_IPS=""
+SERVICE_LOGS_SINCE=""
+: "${ALLOWED_SWARM_IPS:=}"
+OLD_ALLOWED_SWARM_IPS=""
 
 if [[ -n "$TZ" ]]; then
 	cp /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
@@ -59,12 +61,12 @@ if [[ -n "$SWARM_DAEMON" ]]; then
 
 		deploy_service || continue
 
-		get_load_balancer_ips || continue
+		get_allowed_swarm_ips || continue
 
-		if [[ "$LOAD_BALANCER_IPS" != "$OLD_LOAD_BALANCER_IPS" ]]; then
+		if [[ "$ALLOWED_SWARM_IPS" != "$OLD_ALLOWED_SWARM_IPS" ]]; then
 			update_service || continue
 
-			OLD_LOAD_BALANCER_IPS="$LOAD_BALANCER_IPS"
+			OLD_ALLOWED_SWARM_IPS="$ALLOWED_SWARM_IPS"
 		fi
 
 		ERRCOUNT=0
@@ -77,15 +79,20 @@ else
 
 		get_network_subnet || continue
 
-		get_whitelisted_container_ids || continue
+		get_whitelisted_container_ips || continue
+
+		if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+			get_netns || continue
+			get_local_load_balancer_ip || continue
+		fi
 
 		DATE=$(date "+%Y-%m-%d %H:%M:%S")
 
-		if [[ "$SUBNET" != "$OLD_SUBNET" || "${WHITELIST[*]}" != "${OLD_WHITELIST[*]}" ]]; then
-			if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-				get_netns || continue
-				get_local_load_balancer_ip || continue
-			fi
+		if [[ \
+			"$SUBNET" != "$OLD_SUBNET" || \
+			"$WHITELIST_IPS" != "$OLD_WHITELIST_IPS" || \
+			"$LOCAL_LOAD_BALANCER_IP" != "$OLD_LOCAL_LOAD_BALANCER_IP" \
+		]]; then
 
 			add_chain || continue
 
@@ -96,11 +103,13 @@ else
 				block_host_traffic  || continue
 			fi
 
-			if [[ "$NETWORK_DRIVER" == "overlay" ]]; then			
-				allow_load_balancer_traffic || continue
+			if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+				report_local_whitelist_ips || continue		
+				allow_local_load_balancer_traffic || continue
+				allow_swarm_whitelist_traffic || continue
 			fi
 
-			allow_whitelist_traffic || continue
+			allow_local_whitelist_traffic || continue
 
 			remove_old_rules TRAFFICJAM || continue
 
@@ -109,8 +118,8 @@ else
 			fi
 
 			OLD_SUBNET="$SUBNET"
-
-			OLD_WHITELIST=("${WHITELIST[@]}")
+			OLD_WHITELIST_IPS="$WHITELIST_IPS"
+			OLD_LOCAL_LOAD_BALANCER_IP="$LOCAL_LOAD_BALANCER_IP"
 		fi
 
 		ERRCOUNT=0

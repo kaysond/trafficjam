@@ -1,3 +1,11 @@
+function setup_file() {
+	if command -v docker-compose; then
+		export DOCKER_COMPOSE_CMD=docker-compose
+	else
+		export DOCKER_COMPOSE_CMD='docker compose'
+	fi
+}
+
 @test "Run shellcheck" {
 	shellcheck "$BATS_TEST_DIRNAME/../trafficjam-functions.sh"
 	shellcheck -x "$BATS_TEST_DIRNAME/../trafficjam.sh"
@@ -12,7 +20,7 @@
 }
 
 @test "Deploy the non-swarm environment" {
-	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
+	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
 }
 
 @test "Test the non-swarm environment" {
@@ -20,7 +28,7 @@
 }
 
 @test "Deploy the non-swarm environment with nftables" {
-	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables up --detach
+	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables up --detach
 }
 
 @test "Test the non-swarm environment with nftables" {
@@ -28,7 +36,7 @@
 }
 
 @test "Deploy the swarm environment" {
-	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
+	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
 	sleep 5
 	docker exec swarm-manager docker swarm init
 	docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
@@ -52,8 +60,8 @@
 }
 
 function teardown_file() {
-	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
-	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables down
-	docker-compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm down
+	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
+	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables down
+	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm down
 	docker image rm --force trafficjam_bats trafficjam_test
 }
