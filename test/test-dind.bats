@@ -12,7 +12,7 @@ setup_file() {
 		fi
 		sleep 5
 	done
-	docker-compose -f /opt/trafficjam/test/docker-compose-dind.yml up -d
+	docker compose -f /opt/trafficjam/test/docker-compose-dind.yml up -d
 	docker exec traefik apk add --no-cache curl
 }
 
@@ -72,9 +72,9 @@ setup_file() {
 }
 
 @test "deploy with ALLOW_HOST_TRAFFIC" {
-	docker-compose -f /opt/trafficjam/test/docker-compose-dind.yml down
+	docker compose -f /opt/trafficjam/test/docker-compose-dind.yml down
 	sleep 5
-	docker-compose -f /opt/trafficjam/test/docker-compose-dind-allowhost.yml up -d
+	docker compose -f /opt/trafficjam/test/docker-compose-dind-allowhost.yml up -d
 }
 
 @test "containers can communicate via host-mapped ports (public1)" {
