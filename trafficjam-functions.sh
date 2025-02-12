@@ -77,17 +77,19 @@ function remove_service() {
 function deploy_service() {
 	if ! docker inspect "$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID")" &> /dev/null; then
 		if ! SERVICE_ID=$(
+			# rslave bind-propagation is needed so that any new mounts in the host docker/netns appear in the container
 			docker service create \
 				--quiet \
 				--detach \
 				--name "trafficjam_$INSTANCE_ID" \
 				--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
-				--mount type=bind,source=/var/run/docker/netns,destination=/var/run/netns \
+				--mount type=bind,source=/var/run/docker/netns,destination=/var/run/netns,bind-propagation=rslave \
 				--env TZ="$TZ" \
 				--env POLL_INTERVAL="$POLL_INTERVAL" \
 				--env NETWORK="$NETWORK" \
 				--env WHITELIST_FILTER="$WHITELIST_FILTER" \
 				--env DEBUG="$DEBUG" \
+				--env SWARM_WORKER=true \
 				--cap-add NET_ADMIN \
 				--cap-add SYS_ADMIN \
 				--mode global \
@@ -167,7 +169,11 @@ function update_service() {
 
 function get_network_driver() {
 	if ! NETWORK_DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [[ -z "$NETWORK_DRIVER" ]]; then
-		log_error "Unexpected error while determining network driver: $NETWORK_DRIVER"
+		if [[ -n "$SWARM_WORKER" ]]; then
+			log_debug "Network was not found, but this is a swarm node"
+		else
+			log_error "Unexpected error while determining network driver: $NETWORK_DRIVER"
+		fi
 		return 1
 	else
 		log_debug "Network driver of $NETWORK is $NETWORK_DRIVER"
@@ -204,6 +210,7 @@ function get_whitelisted_container_ips() {
 	fi
 
 	log_debug "Whitelisted container IPs: $WHITELIST_IPS"
+
 }
 
 function get_netns() {
@@ -221,20 +228,28 @@ function get_netns() {
 		esac
 	done
 	if [[ -z "$NETNS" ]]; then
-		log_error "Could not retrieve network namespace for network ID $NETWORK_ID"
-		return 1
+		if [[ -n "$SWARM_WORKER" ]]; then
+			log_debug "No container on network $NETWORK on this node, skipping"
+		else
+			log_error "Could not retrieve network namespace for network ID $NETWORK_ID"
+			return 1
+		fi
 	else
 		log_debug "Network namespace of $NETWORK (ID: $NETWORK_ID) is $NETNS"
 	fi
 }
 
 function get_local_load_balancer_ip() {
-	if ! LOCAL_LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || [ -z "$LOCAL_LOAD_BALANCER_IP" ]; then
+	if ! LOCAL_LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || { [ -z "$LOCAL_LOAD_BALANCER_IP" ] && [[ -z "$SWARM_WORKER" ]]; }; then
 		log_error "Could not retrieve load balancer IP for network $NETWORK"
 		return 1
 	fi
 
-	log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
+	if [[ -z "$LOCAL_LOAD_BALANCER_IP" ]] && [[ -n "$SWARM_WORKER" ]]; then
+		log_debug "No load balancer found on this node"
+	else
+		log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
+	fi
 }
 
 function iptables_tj() {
@@ -249,8 +264,15 @@ function add_chain() {
 	local RESULT
 	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >&/dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM 2>&1); then
-			log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
-			return 1
+			if [[ -z "$SWARM_WORKER" ]]; then
+				log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
+				return 1
+			else
+				# Ugly workaround for nsenter: setns(): can't reassociate to namespace: Invalid argument
+				log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT."
+				log_error "killing container to get access to the new network namespace (ugly workaround)"
+				kill 1
+			fi
 		else
 			log "Added chain: TRAFFICJAM"
 		fi
