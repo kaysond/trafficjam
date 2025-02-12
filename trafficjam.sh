@@ -21,6 +21,7 @@ fi
 : "${ALLOW_HOST_TRAFFIC:=}"
 : "${DEBUG:=}"
 : "${TZ:=}"
+: "${SWARM_WORKER:=}"
 NETNS=""
 OLD_SUBNET=""
 OLD_WHITELIST_IPS=""
@@ -75,6 +76,10 @@ else
 	while true; do
 		tj_sleep
 
+		if [[ -n "$SWARM_WORKER" ]]; then
+			log_debug "Running in swarm mode"
+		fi
+
 		get_network_driver || continue
 
 		get_network_subnet || continue
@@ -93,6 +98,11 @@ else
 			"$WHITELIST_IPS" != "$OLD_WHITELIST_IPS" ||
 			"$LOCAL_LOAD_BALANCER_IP" != "$OLD_LOCAL_LOAD_BALANCER_IP" ]] \
 			; then
+
+			if [[ -n "$SWARM_WORKER" && -z "$WHITELIST_IPS" && -z "$LOCAL_LOAD_BALANCER_IP" ]]; then
+				log_debug "No loadbalancer or container running on this node, skipping"
+				continue
+			fi
 
 			add_chain || continue
 
