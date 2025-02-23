@@ -46,7 +46,6 @@ docker run \
 
 `docker-compose.yml`:
 ```
-version: '3.8'
 services:
   trafficjam:
     container_name: trafficjam
@@ -84,7 +83,7 @@ docker service create \
   --name trafficjam \
   --mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
   --env NETWORK=traefik_public \
-  --env WHITELIST_FILTER=ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9 \
+  --env WHITELIST_FILTER=ancestor=traefik:v3.3.3@sha256:19884a9d0b922b321c9cff54cbfe43f3169893041b8dd4ea6100677afaddce46 \
   --env SWARM_DAEMON=true \
   --env TZ=America/Los_Angeles \
   --replicas 1 \
@@ -94,8 +93,6 @@ docker service create \
 
 `docker-compose.yml`:
 ```
-version: '3.8'
-
 services:
   trafficjam:
     image: trafficjam
@@ -103,7 +100,7 @@ services:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       NETWORK: traefik_network
-      WHITELIST_FILTER: ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
+      WHITELIST_FILTER: ancestor=traefik:v3.3.3@sha256:19884a9d0b922b321c9cff54cbfe43f3169893041b8dd4ea6100677afaddce46
       SWARM_DAEMON: "true"
       TZ: America/Los_Angeles
     deploy:
@@ -130,9 +127,9 @@ TrafficJam is configured via several environment variables:
 * **DEBUG** - Setting this variable turns on debug logging
 
 ## Dependencies
-* Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.7 (legacy)` or `1.8.7 (nf_tables)`)
+* Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.10`)
   * **NOTE:** support for legacy iptables (non-nftables) is deprecated, not actively tested, and will be removed from a future release.
-* Docker >20.10.0
+* Modern version of Docker (trafficjam image and CI use 26.1.3)
 
 ## Clearing Rules
 `trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the host docker socket must be mounted within the container. The rules can also be cleared by sending the `SIGUSR1` signal to the container. This will cause `trafficjam` to exit.

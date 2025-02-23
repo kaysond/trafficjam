@@ -1,5 +1,4 @@
-version: '3.8'
-
+---
 services:
   trafficjam:
     image: trafficjam
@@ -9,7 +8,7 @@ services:
       TZ: America/Los_Angeles
       POLL_INTERVAL: 1
       NETWORK: test_public
-      WHITELIST_FILTER: ancestor=traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
+      WHITELIST_FILTER: ancestor=traefik:v3.3.3@sha256:19884a9d0b922b321c9cff54cbfe43f3169893041b8dd4ea6100677afaddce46
       DEBUG: "true"
       SWARM_IMAGE: "trafficjam"
       SWARM_DAEMON: "true"
@@ -20,7 +19,7 @@ services:
 
   reverseproxy:
     hostname: "{{ .Service.Name }}.{{ .Task.Slot }}"
-    image: traefik:v2.3.7@sha256:0aca29bb8e51aa69569b15b8b7f08328e6957cbec201dd532304b3329e5a82a9
+    image: traefik:v3.3.3@sha256:19884a9d0b922b321c9cff54cbfe43f3169893041b8dd4ea6100677afaddce46
     networks:
       public:
       private:

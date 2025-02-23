@@ -1,12 +1,13 @@
-FROM golang:alpine3.6 AS binary
-ADD . /app
+FROM golang:alpine3.21 AS binary
+ADD whoami.go /app/
 WORKDIR /app
-RUN go build -o http
+RUN go mod init whoami && \
+    go build
 
-FROM alpine:3.6
+FROM alpine:3.21
 WORKDIR /app
-ENV PORT 8000
+ENV PORT=8000
 EXPOSE 8000
-COPY --from=binary /app/http /app
+COPY --from=binary /app/whoami /app
 RUN apk add --no-cache curl
-CMD ["/app/http"]
+CMD ["/app/whoami"]

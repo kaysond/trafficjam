@@ -1,5 +1,4 @@
-version: '3.8'
-
+---
 services:
   trafficjam:
     container_name: trafficjam
@@ -11,14 +10,14 @@ services:
       TZ: America/Los_Angeles
       POLL_INTERVAL: 1
       NETWORK: test_public
-      WHITELIST_FILTER: ancestor=traefik:v2.3.7
+      WHITELIST_FILTER: ancestor=traefik:v3.3.3
       DEBUG: "true"
     cap_add:
       - NET_ADMIN
 
   reverseproxy:
     container_name: traefik
-    image: traefik:v2.3.7
+    image: traefik:v3.3.3
     networks:
       public:
       private:
