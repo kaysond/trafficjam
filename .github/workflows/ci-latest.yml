@@ -17,6 +17,17 @@ jobs:
           shellcheck trafficjam-functions.sh
           shellcheck -x trafficjam.sh
 
+      - name: Install shfmt
+        shell: bash
+        run: |
+          sudo add-apt-repository ppa:longsleep/golang-backports
+          sudo apt install golang-go
+          export GOPATH=/usr/local
+          sudo -E go install mvdan.cc/sh/v3/cmd/shfmt@latest
+
+      - name: Run shfmt
+        run: shfmt --diff trafficjam.sh trafficjam-functions.sh
+
       - name: Install bats
         run: |
           sudo git clone --depth 1 --branch v1.8.0 https://github.com/bats-core/bats-core.git /opt/bats

@@ -8,4 +8,4 @@ Please run the tests before submitting a PR. There are two dependencies for test
 For information on how `trafficjam` and its tests are structured, please see [ARCHITECTURE.md](architecture.md)
 
 ## Style
-Please follow the coding style that is used. Since this is a bash script, use tabs for indentation. For readability and ease of understanding, use long forms of arguments where possible.
+Please use [`shfmt`](https://github.com/mvdan/sh) for formatting. For readability and ease of understanding, use long forms of arguments where possible.
