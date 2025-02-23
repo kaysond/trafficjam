@@ -232,7 +232,7 @@ function get_local_load_balancer_ip() {
 
 function iptables_tj() {	
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		nsenter --net="$NETNS" -- $IPTABLES_CMD "$@"
+		nsenter --net="$NETNS" -- "$IPTABLES_CMD" "$@"
 	else
 		$IPTABLES_CMD "$@"
 	fi

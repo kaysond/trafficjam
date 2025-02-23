@@ -5,7 +5,7 @@ setup_file() {
 	fi
 	#Wait for images to finish building on container startup for 60s
 	while ! docker image ls | grep -q whoami; do
-		if (( ++i > 12 )); then
+		if (( ++i > 24 )); then
 			echo "Timed out waiting for images to build" >&2
 			docker image ls >&2
 			exit 1
