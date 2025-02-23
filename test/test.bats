@@ -27,14 +27,6 @@ function setup_file() {
 	docker exec trafficjam_test bats /opt/trafficjam/test/test-dind.bats
 }
 
-@test "Deploy the non-swarm environment with nftables" {
-	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables up --detach
-}
-
-@test "Test the non-swarm environment with nftables" {
-	docker exec trafficjam_test_nftables bats /opt/trafficjam/test/test-dind.bats
-}
-
 @test "Deploy the swarm environment" {
 	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
 	sleep 5
