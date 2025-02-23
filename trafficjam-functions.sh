@@ -10,10 +10,10 @@ function tj_trap() {
 function tj_sleep() {
 	#Slow logging on errors
 	log_debug "Error Count: $ERRCOUNT"
-	if (( ERRCOUNT > 10 )); then
-		SLEEP_TIME=$(( POLL_INTERVAL*11 ))
+	if ((ERRCOUNT > 10)); then
+		SLEEP_TIME=$((POLL_INTERVAL * 11))
 	else
-		SLEEP_TIME=$(( POLL_INTERVAL*(ERRCOUNT+1) ))
+		SLEEP_TIME=$((POLL_INTERVAL * (ERRCOUNT + 1)))
 	fi
 
 	# This pattern, along with the trap above, allows for quick script exits
@@ -27,7 +27,7 @@ function log() {
 
 function log_error() {
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] ERROR: $1" >&2
-	ERRCOUNT=$((ERRCOUNT+1))
+	ERRCOUNT=$((ERRCOUNT + 1))
 }
 
 function log_debug() {
@@ -49,14 +49,13 @@ function clear_rules() {
 		get_network_driver || NETWORK_DRIVER=local
 	fi
 
-
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 		get_netns
 	fi
 
 	DATE=$(date "+%Y-%m-%d %H:%M:%S")
-	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit 
-	remove_old_rules TRAFFICJAM_INPUT || true 
+	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit
+	remove_old_rules TRAFFICJAM_INPUT || true
 
 	exit 0
 }
@@ -77,7 +76,8 @@ function remove_service() {
 
 function deploy_service() {
 	if ! docker inspect "$(docker service ls --quiet --filter "label=trafficjam.id=$INSTANCE_ID")" &> /dev/null; then
-		if ! SERVICE_ID=$(docker service create \
+		if ! SERVICE_ID=$(
+			docker service create \
 				--quiet \
 				--detach \
 				--name "trafficjam_$INSTANCE_ID" \
@@ -95,13 +95,13 @@ function deploy_service() {
 				--network host \
 				--label trafficjam.id="$INSTANCE_ID" \
 				"$SWARM_IMAGE" 2>&1
-			); then
+		); then
 			log_error "Unexpected error while deploying service: $SERVICE_ID"
 			return 1
 		else
 			#docker service create may print warnings to stderr even if it succeeds
 			#particularly due to the trafficjam image not being accessible in a registry during CI
-			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1) 
+			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1)
 			log "Created service trafficjam_$INSTANCE_ID: $SERVICE_ID"
 		fi
 	else
@@ -131,21 +131,21 @@ function get_allowed_swarm_ips() {
 
 		#This mess searches the service logs for running containers' "#WHITELIST_IPS#" output
 		#and saves the most recent output from each container into the variable
-		if ! ALLOWED_SWARM_IPS=$({ printf '%s' "$SERVICE_LOGS" | \
-				grep -E "$(printf '(%s)' "$CONT_IDS" | tr '\n' '|')" | \
-				grep -E "#WHITELIST_IPS#" | \
-				# reverse the lines
-				tac | \
- 				# only get the first (newest) log entry per container
-				awk '!a[$1]++ { print }' | \
-				# delete everything up to and including the tag
-				sed 's/^.*#WHITELIST_IPS#//' | \
-				# one IP per line
-				tr ' ' '\n' | \
-				sort -t . -d | \
-				uniq | \
-				# back to one line for nicer debug log output
-				tr '\n' ' '; } 2>&1); then
+		if ! ALLOWED_SWARM_IPS=$({ printf '%s' "$SERVICE_LOGS" |
+			grep -E "$(printf '(%s)' "$CONT_IDS" | tr '\n' '|')" |
+			grep -E "#WHITELIST_IPS#" |
+			# reverse the lines
+			tac |
+			# only get the first (newest) log entry per container
+			awk '!a[$1]++ { print }' |
+			# delete everything up to and including the tag
+			sed 's/^.*#WHITELIST_IPS#//' |
+			# one IP per line
+			tr ' ' '\n' |
+			sort -t . -d |
+			uniq |
+			# back to one line for nicer debug log output
+			tr '\n' ' '; } 2>&1); then
 			log_debug "No swarm whitelist ips found"
 			ALLOWED_SWARM_IPS="$OLD_ALLOWED_SWARM_IPS"
 		else
@@ -209,8 +209,8 @@ function get_netns() {
 
 	for f in /var/run/netns/*; do
 		case $(basename "$f") in
-			lb_*) true;;
-			*"${NETWORK_ID:0:9}"*) NETNS="$f";;
+			lb_*) true ;;
+			*"${NETWORK_ID:0:9}"*) NETNS="$f" ;;
 		esac
 	done
 	if [[ -z "$NETNS" ]]; then
@@ -230,7 +230,7 @@ function get_local_load_balancer_ip() {
 	log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
 }
 
-function iptables_tj() {	
+function iptables_tj() {
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 		nsenter --net="$NETNS" -- "$IPTABLES_CMD" "$@"
 	else
@@ -240,7 +240,7 @@ function iptables_tj() {
 
 function add_chain() {
 	local RESULT
-	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >&/dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM 2>&1); then
 			log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
 			return 1
@@ -256,7 +256,7 @@ function add_chain() {
 		CHAIN="DOCKER-USER"
 	fi
 
-	if ! iptables_tj --table filter --numeric --list "$CHAIN" | grep "TRAFFICJAM" >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list "$CHAIN" | grep "TRAFFICJAM" >&/dev/null; then
 		if ! RESULT=$(iptables_tj --table filter --insert "$CHAIN" --jump TRAFFICJAM 2>&1); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
@@ -278,7 +278,7 @@ function block_subnet_traffic() {
 
 function add_input_chain() {
 	local RESULT
-	if ! iptables_tj --table filter --numeric --list TRAFFICJAM_INPUT >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list TRAFFICJAM_INPUT >&/dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding chain TRAFFICJAM_INPUT: $RESULT"
 			return 1
@@ -286,7 +286,7 @@ function add_input_chain() {
 			log "Added chain: TRAFFICJAM_INPUT"
 		fi
 	fi
-	if ! iptables_tj --table filter --numeric --list INPUT | grep "TRAFFICJAM_INPUT" >& /dev/null; then
+	if ! iptables_tj --table filter --numeric --list INPUT | grep "TRAFFICJAM_INPUT" >&/dev/null; then
 		if ! RESULT=$(iptables_tj --table filter --insert INPUT --jump TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
