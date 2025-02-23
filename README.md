@@ -131,6 +131,7 @@ TrafficJam is configured via several environment variables:
 
 ## Dependencies
 * Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.7 (legacy)` or `1.8.7 (nf_tables)`)
+  * **NOTE:** support for legacy iptables (non-nftables) is deprecated, not actively tested, and will be removed from a future release.
 * Docker >20.10.0
 
 ## Clearing Rules
