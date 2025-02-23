@@ -1,4 +1,4 @@
-FROM docker:24.0.7
+FROM docker:26.1.3
 
 RUN apk add --no-cache bash iproute2 iptables tzdata
 

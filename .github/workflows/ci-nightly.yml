@@ -9,10 +9,15 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out code
         uses: actions/checkout@v2
+
+      - name: Run shellcheck
+        run: |
+          shellcheck trafficjam-functions.sh
+          shellcheck -x trafficjam.sh
 
       - name: Install bats
         run: |

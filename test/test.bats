@@ -1,26 +1,21 @@
-function setup_file() {
-	if command -v docker-compose; then
-		export DOCKER_COMPOSE_CMD=docker-compose
-	else
-		export DOCKER_COMPOSE_CMD='docker compose'
-	fi
-}
-
-@test "Run shellcheck" {
-	shellcheck "$BATS_TEST_DIRNAME/../trafficjam-functions.sh"
-	shellcheck -x "$BATS_TEST_DIRNAME/../trafficjam.sh"
-}
-
 @test "Build the image" {
 	docker build --tag trafficjam_bats --file "$BATS_TEST_DIRNAME"/../Dockerfile "$BATS_TEST_DIRNAME"/..
 }
 
-@test "Build the test image" {
+@test "Build the test images" {
 	docker build --tag trafficjam_test --file "$BATS_TEST_DIRNAME"/containers/trafficjam_test/Dockerfile  "$BATS_TEST_DIRNAME"/..
+	docker build --tag trafficjam_test_whoami --file "$BATS_TEST_DIRNAME"/containers/whoami/Dockerfile  "$BATS_TEST_DIRNAME"/containers/whoami
 }
 
 @test "Deploy the non-swarm environment" {
-	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
+	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
+	while ! docker exec trafficjam_test docker ps; do
+		if (( ++i > 12 )); then
+			echo "Timed out waiting for docker in docker to start up" >&2
+			exit 1
+		fi
+		sleep 5
+	done
 }
 
 @test "Test the non-swarm environment" {
@@ -28,8 +23,14 @@ function setup_file() {
 }
 
 @test "Deploy the swarm environment" {
-	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
-	sleep 5
+	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
+	while ! docker exec swarm-manager docker ps || ! docker exec swarm-worker docker ps; do
+		if (( ++i > 12 )); then
+			echo "Timed out waiting for docker in docker to start up" >&2
+			exit 1
+		fi
+		sleep 5
+	done
 	docker exec swarm-manager docker swarm init
 	docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
 	sleep 5
@@ -53,7 +54,6 @@ function setup_file() {
 
 function teardown_file() {
 	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
-	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-nftables.yml --project-name trafficjam_test_nftables down
 	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm down
-	docker image rm --force trafficjam_bats trafficjam_test
+	docker image rm --force trafficjam_bats trafficjam_test trafficjam_test_whoami
 }
