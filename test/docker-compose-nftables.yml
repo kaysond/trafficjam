@@ -1,8 +1,0 @@
-version: '3.8'
-services:
-  trafficjam_test_nftables:
-    image: trafficjam_test
-    container_name: trafficjam_test_nftables
-    environment:
-      NFTABLES: "true"
-    privileged: true

@@ -37,9 +37,10 @@ function log_debug() {
 }
 
 function detect_iptables_version() {
-	IPTABLES_CMD=iptables
-	if iptables-nft --numeric --list DOCKER-USER &> /dev/null; then
-		IPTABLES_CMD=iptables-nft
+	IPTABLES_CMD=iptables-nft
+	if ! iptables-nft --numeric --list DOCKER-USER &> /dev/null; then
+		IPTABLES_CMD=iptables-legacy
+		log "DEPRECATION NOTICE: support for legacy iptables is deprecated and will be removed in a future relase"
 	fi
 }
 
