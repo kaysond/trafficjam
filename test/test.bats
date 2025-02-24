@@ -11,7 +11,8 @@
 	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
 	while ! docker exec trafficjam_test docker ps; do
 		if (( ++i > 24 )); then
-			echo "Timed out waiting for docker in docker to start up" >&2
+			echo "Timed out waiting for docker in docker to start up. Logs:" >&2
+			docker logs trafficjam_test >&2
 			exit 1
 		fi
 		sleep 5
@@ -26,7 +27,9 @@
 	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
 	while ! docker exec swarm-manager docker ps || ! docker exec swarm-worker docker ps; do
 		if (( ++i > 24 )); then
-			echo "Timed out waiting for docker in docker to start up" >&2
+			echo "Timed out waiting for docker in docker to start up. Logs:" >&2
+			docker logs swarm-manager
+			docker logs swarm-worker
 			exit 1
 		fi
 		sleep 5
