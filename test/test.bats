@@ -9,7 +9,7 @@
 
 @test "Deploy the non-swarm environment" {
 	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
-	while ! docker exec trafficjam_test docker ps; do
+	while ! docker exec trafficjam_test docker ps &> /dev/null; do
 		if (( ++i > 24 )); then
 			echo "Timed out waiting for docker in docker to start up. Logs:" >&2
 			docker logs trafficjam_test >&2
@@ -25,7 +25,7 @@
 
 @test "Deploy the swarm environment" {
 	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
-	while ! docker exec swarm-manager docker ps || ! docker exec swarm-worker docker ps; do
+	while ! docker exec swarm-manager docker ps &> /dev/null || ! docker exec swarm-worker docker ps &> /dev/null; do
 		if (( ++i > 24 )); then
 			echo "Timed out waiting for docker in docker to start up. Logs:" >&2
 			docker logs swarm-manager
