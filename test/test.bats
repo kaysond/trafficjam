@@ -53,7 +53,7 @@
 }
 
 function teardown_file() {
-	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
-	$DOCKER_COMPOSE_CMD --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm down
+	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test down
+	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm down
 	docker image rm --force trafficjam_bats trafficjam_test trafficjam_test_whoami
 }
