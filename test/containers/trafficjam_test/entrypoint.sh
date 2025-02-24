@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 /usr/local/bin/dockerd-entrypoint.sh dockerd &
-#Wait for docker startup for 60s
+# Wait for docker daemon to start up so we can build the containers
 while ! docker ps &> /dev/null; do
     if (( ++i > 24 )); then
         echo "Timed out waiting for docker to start up" >&2
