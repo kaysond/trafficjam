@@ -109,6 +109,9 @@ services:
         constraints: ['node.role==manager']
 ```
 
+### Docker Socket Proxying
+The attack surface of trafficjam is very low because it is not exposed to any networks; it's nearly the same as running the bash scripts outside of docker. For this reason, bind mounting the docker socket does not pose a significant security concern. It is possible to use a docker socket proxy nonetheless with some special setup. First, the proxy image must have a static IP address. Second, the environment variable `DOCKER_HOST` must be set on **trafficjam** to `tcp://<proxy ip address>:2375`. For more details, see #15.
+
 **Notes:** 
 Docker Swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
 
