@@ -185,10 +185,17 @@ function get_network_subnet() {
 
 function get_whitelisted_container_ips() {
 	local CONTAINER_IDS
-	if ! CONTAINER_IDS=$(docker ps --filter "$WHITELIST_FILTER" --filter network="$NETWORK" --format="{{ .ID }}" 2>&1) || [[ -z "$CONTAINER_IDS" ]]; then
+	if ! CONTAINER_IDS=$(docker ps --filter "$WHITELIST_FILTER" --filter network="$NETWORK" --format="{{ .ID }}" 2>&1); then
 		log_error "Unexpected error while getting whitelist container IDs: $CONTAINER_IDS"
 		return 1
 	fi
+
+	if [[ -z "$CONTAINER_IDS" ]]; then
+		WHITELIST_IPS=""
+		log_debug "No containers matched the whitelist"
+		return 0
+	fi
+
 	log_debug "Whitelisted containers: $CONTAINER_IDS"
 
 	if ! WHITELIST_IPS=$(xargs docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" <<< "$CONTAINER_IDS" 2>&1) || [[ -z "$WHITELIST_IPS" ]]; then
