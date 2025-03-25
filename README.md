@@ -132,7 +132,7 @@ TrafficJam is configured via several environment variables:
 ## Dependencies
 * Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.10`)
   * **NOTE:** support for legacy iptables (non-nftables) is deprecated, not actively tested, and will be removed from a future release.
-* Modern version of Docker (trafficjam image and CI use 26.1.3)
+* Modern version of Docker (trafficjam image and CI use 28.0.4)
 
 ## Clearing Rules
 `trafficjam` can be run with the `--clear` argument to remove all rules that have been set. Note that the host docker socket must be mounted within the container. The rules can also be cleared by sending the `SIGUSR1` signal to the container. This will cause `trafficjam` to exit.
