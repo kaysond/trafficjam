@@ -2,5 +2,8 @@
 services:
   trafficjam_test:
     image: trafficjam_test
+    build:
+      context: ..
+      dockerfile: test/containers/trafficjam_test/Dockerfile
     container_name: trafficjam_test
     privileged: true

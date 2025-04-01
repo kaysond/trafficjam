@@ -2,6 +2,9 @@
 services:
   swarm-manager:
     image: trafficjam_test
+    build:
+      context: ..
+      dockerfile: test/containers/trafficjam_test/Dockerfile
     container_name: swarm-manager
     privileged: true
     networks:
@@ -9,6 +12,9 @@ services:
 
   swarm-worker:
     image: trafficjam_test
+    build:
+      context: ..
+      dockerfile: test/containers/trafficjam_test/Dockerfile
     container_name: swarm-worker
     privileged: true
     networks:
