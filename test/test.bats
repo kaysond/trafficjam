@@ -1,15 +1,6 @@
-@test "Build the image" {
-	docker build --tag trafficjam_bats --file "$BATS_TEST_DIRNAME"/../Dockerfile "$BATS_TEST_DIRNAME"/..
-}
-
-@test "Build the test images" {
-	docker build --tag trafficjam_test --file "$BATS_TEST_DIRNAME"/containers/trafficjam_test/Dockerfile  "$BATS_TEST_DIRNAME"/..
-	docker build --tag trafficjam_test_whoami --file "$BATS_TEST_DIRNAME"/containers/whoami/Dockerfile  "$BATS_TEST_DIRNAME"/containers/whoami
-}
-
 @test "Deploy the non-swarm environment" {
 	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose.yml --project-name trafficjam_test up --detach
-	while ! docker exec trafficjam_test docker ps &> /dev/null; do
+	while ! docker exec trafficjam_test docker info &> /dev/null; do
 		if (( ++i > 24 )); then
 			echo "Timed out waiting for docker in docker to start up. Logs:" >&2
 			docker logs trafficjam_test >&2
@@ -25,7 +16,7 @@
 
 @test "Deploy the swarm environment" {
 	docker compose --file "$BATS_TEST_DIRNAME"/docker-compose-swarm.yml --project-name trafficjam_test_swarm up --detach
-	while ! docker exec swarm-manager docker ps &> /dev/null || ! docker exec swarm-worker docker ps &> /dev/null; do
+	while ! docker exec swarm-manager docker info &> /dev/null || ! docker exec swarm-worker docker info &> /dev/null; do
 		if (( ++i > 24 )); then
 			echo "Timed out waiting for docker in docker to start up. Logs:" >&2
 			docker logs swarm-manager
@@ -37,6 +28,10 @@
 	docker exec swarm-manager docker swarm init
 	docker exec swarm-worker $(docker exec swarm-manager docker swarm join-token worker | grep "join --token")
 	sleep 5
+	docker exec swarm-manager docker build -t trafficjam /opt/trafficjam
+	docker exec swarm-manager docker build -t whoami /opt/trafficjam/test/containers/whoami
+	docker exec swarm-worker docker build -t trafficjam /opt/trafficjam
+	docker exec swarm-worker docker build -t whoami /opt/trafficjam/test/containers/whoami
 	docker exec swarm-manager docker stack deploy -c /opt/trafficjam/test/docker-compose-dind-swarm.yml test
 }
 

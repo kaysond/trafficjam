@@ -3,6 +3,7 @@ services:
   trafficjam:
     container_name: trafficjam
     image: trafficjam
+    build: /opt/trafficjam
     network_mode: host
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
@@ -25,6 +26,7 @@ services:
   private1:
     container_name: private1
     image: whoami
+    build: /opt/trafficjam/test/containers/whoami
     ports:
       - "8000:8000"
     networks:
@@ -33,6 +35,7 @@ services:
   public1:
     container_name: public1
     image: whoami
+    build: /opt/trafficjam/test/containers/whoami
     ports:
       - "8001:8000"
     networks:
@@ -41,6 +44,7 @@ services:
   public2:
     container_name: public2
     image: whoami
+    build: /opt/trafficjam/test/containers/whoami
     ports:
       - "8002:8000"
     networks:
