@@ -1,4 +1,4 @@
-FROM docker:26.1.3-dind
+FROM docker:28.0.4-dind
 
 ARG BATS_VER=v1.8.0
 
@@ -9,5 +9,3 @@ RUN apk add --no-cache bash curl && \
 
 #Copy Repo
 COPY . /opt/trafficjam
-
-ENTRYPOINT /opt/trafficjam/test/containers/trafficjam_test/entrypoint.sh

@@ -52,9 +52,7 @@ setup_file() {
 
 			if (( ++i >= LIMIT )); then
 				echo "Timed out waiting for swarm state to converge" >&2
-				IFS='\n'
-				echo -e "${ERRORS[@]}" >&2
-				IFS=' \n\t'
+				printf "%s\n" "${ERRORS[@]}" >&2
 				exit 1
 			fi
 		done
