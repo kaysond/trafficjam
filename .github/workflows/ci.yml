@@ -30,6 +30,12 @@ jobs:
       - name: Run shfmt
         run: shfmt --diff trafficjam.sh trafficjam-functions.sh
 
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3.4.0
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
       - name: Install bats
         run: |
           sudo git clone --depth 1 --branch v1.8.0 https://github.com/bats-core/bats-core.git /opt/bats
