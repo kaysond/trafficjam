@@ -7,3 +7,5 @@ services:
       dockerfile: test/containers/trafficjam_test/Dockerfile
     container_name: trafficjam_test
     privileged: true
+    volumes:
+      - '$HOME/.docker/config.json:/root/.docker/config.json'
