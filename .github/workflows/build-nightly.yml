@@ -2,10 +2,10 @@ name: Build - Nightly
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ main ]
 
 jobs:
-  build:
+  nightly_build:
     runs-on: ubuntu-latest
     steps:
       - name: Check Out Repo 

@@ -9,6 +9,8 @@ services:
     privileged: true
     networks:
       - swarm
+    volumes:
+      - '$HOME/.docker/config.json:/root/.docker/config.json'
 
   swarm-worker:
     image: trafficjam_test
@@ -19,6 +21,8 @@ services:
     privileged: true
     networks:
       - swarm
+    volumes:
+      - '$HOME/.docker/config.json:/root/.docker/config.json'
 
 networks:
   swarm:
