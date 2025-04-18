@@ -23,7 +23,7 @@ fi
 : "${TZ:=}"
 : "${SWARM_WORKER:=}"
 NETNS=""
-OLD_SUBNET=""
+OLD_SUBNETS=""
 OLD_WHITELIST_IPS=""
 LOCAL_LOAD_BALANCER_IP=""
 OLD_LOCAL_LOAD_BALANCER_IP=""
@@ -94,7 +94,7 @@ else
 		DATE=$(date "+%Y-%m-%d %H:%M:%S")
 
 		if [[ 
-			"$SUBNET" != "$OLD_SUBNET" ||
+			"$SUBNETS" != "$OLD_SUBNETS" ||
 			"$WHITELIST_IPS" != "$OLD_WHITELIST_IPS" ||
 			"$LOCAL_LOAD_BALANCER_IP" != "$OLD_LOCAL_LOAD_BALANCER_IP" ]] \
 			; then
@@ -127,7 +127,7 @@ else
 				remove_old_rules TRAFFICJAM_INPUT || continue
 			fi
 
-			OLD_SUBNET="$SUBNET"
+			OLD_SUBNETS="$SUBNETS"
 			OLD_WHITELIST_IPS="$WHITELIST_IPS"
 			OLD_LOCAL_LOAD_BALANCER_IP="$LOCAL_LOAD_BALANCER_IP"
 		fi
