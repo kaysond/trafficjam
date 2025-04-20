@@ -181,7 +181,7 @@ function get_network_driver() {
 }
 
 function get_network_subnet() {
-	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK" 2>&1) || [[ -z "$SUBNET" ]]; then
+	if ! SUBNET=$(docker network inspect --format="{{ (index .IPAM.Config 0).Subnet }}" "$NETWORK" 2>&1) || [[ -z "$SUBNET" ]]; then
 		log_error "Unexpected error while determining network subnet: $SUBNET"
 		return 1
 	else
