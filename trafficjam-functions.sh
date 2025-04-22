@@ -2,19 +2,19 @@
 function tj_trap() {
 	log_debug "Trapping signal"
 	if [[ -n "$SWARM_DAEMON" ]]; then
-		remove_service || exit 1
+		remove_service || {
+			log_error                  "Could not remove swarm worker service"
+			exit                                                                     1
+		}
 	fi
 	exit 0
 }
 
 function tj_sleep() {
-	#Slow logging on errors
-	log_debug "Error Count: $ERRCOUNT"
-	if ((ERRCOUNT > 10)); then
-		SLEEP_TIME=$((POLL_INTERVAL * 11))
-	else
-		SLEEP_TIME=$((POLL_INTERVAL * (ERRCOUNT + 1)))
+	if ((SLEEP_TIME > MAX_POLL_INTERVAL)); then
+		SLEEP_TIME="$MIN_POLL_INTERVAL"
 	fi
+	log_debug "Current SLEEP_TIME: $SLEEP_TIME"
 
 	# This pattern, along with the trap above, allows for quick script exits
 	sleep "${SLEEP_TIME}s" &
@@ -27,20 +27,13 @@ function log() {
 
 function log_error() {
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] ERROR: $1" >&2
-	ERRCOUNT=$((ERRCOUNT + 1))
+	# Slow logging on errors
+	SLEEP_TIME=$((SLEEP_TIME * 2))
 }
 
 function log_debug() {
 	if [[ -n "$DEBUG" ]]; then
 		echo "[$(date "+%Y-%m-%d %H:%M:%S")] DEBUG: $1"
-	fi
-}
-
-function detect_iptables_version() {
-	IPTABLES_CMD=iptables-nft
-	if ! iptables-nft --numeric --list DOCKER-USER &> /dev/null; then
-		IPTABLES_CMD=iptables-legacy
-		log "DEPRECATION NOTICE: support for legacy iptables is deprecated and will be removed in a future relase"
 	fi
 }
 
@@ -54,7 +47,7 @@ function clear_rules() {
 	fi
 
 	DATE=$(date "+%Y-%m-%d %H:%M:%S")
-	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit
+	remove_old_rules TRAFFICJAM || true # this would normally fail if no rules exist but we don't want to exit
 	remove_old_rules TRAFFICJAM_INPUT || true
 
 	exit 0
@@ -87,9 +80,11 @@ function deploy_service() {
 				--env TZ="$TZ" \
 				--env POLL_INTERVAL="$POLL_INTERVAL" \
 				--env NETWORK="$NETWORK" \
-				--env WHITELIST_FILTER="$WHITELIST_FILTER" \
+				--env ALLOW_LIST_NETWORK="$ALLOW_LIST_NETWORK" \
+				--env ALLOW_LIST_HOST="$ALLOW_LIST_HOST" \
+				--env ALLOW_LIST_LAN="$ALLOW_LIST_LAN" \
+				--env ALLOW_LIST_WAN="$ALLOW_LIST_WAN" \
 				--env DEBUG="$DEBUG" \
-				--env SWARM_WORKER=true \
 				--cap-add NET_ADMIN \
 				--cap-add SYS_ADMIN \
 				--mode global \
@@ -101,8 +96,8 @@ function deploy_service() {
 			log_error "Unexpected error while deploying service: $SERVICE_ID"
 			return 1
 		else
-			#docker service create may print warnings to stderr even if it succeeds
-			#particularly due to the trafficjam image not being accessible in a registry during CI
+			# docker service create may print warnings to stderr even if it succeeds
+			# particularly due to the trafficjam image not being accessible in a registry during CI
 			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1)
 			log "Created service trafficjam_$INSTANCE_ID: $SERVICE_ID"
 		fi
@@ -117,7 +112,7 @@ function get_allowed_swarm_ips() {
 		log_error "Unexpected error while getting service update state: $RESULT"
 		return 1
 	elif [[ "$RESULT" != "updating" ]]; then
-		#Filter out any service container that is not running
+		# Filter out any service container that is not running
 		local CONT_IDS
 		if ! CONT_IDS=$(docker service ps --quiet --filter desired-state=running "$SERVICE_ID" | cut -c -12 2>&1); then
 			log_error "Unexpected error while determining service container IDs: $CONT_IDS"
@@ -131,24 +126,24 @@ function get_allowed_swarm_ips() {
 		# We have to only grab the latest log entries because of https://github.com/moby/moby/issues/38640
 		SERVICE_LOGS_SINCE=$(tail -n1 <<< "$SERVICE_LOGS" | cut -d ' ' -f 1)
 
-		#This mess searches the service logs for running containers' "#WHITELIST_IPS#" output
+		#This mess searches the service logs for running containers' "#ALLOWLIST_IPS#" output
 		#and saves the most recent output from each container into the variable
 		if ! ALLOWED_SWARM_IPS=$({ printf '%s' "$SERVICE_LOGS" |
 			grep -E "$(printf '(%s)' "$CONT_IDS" | tr '\n' '|')" |
-			grep -E "#WHITELIST_IPS#" |
+			grep -E "#ALLOWLIST_IPS#" |
 			# reverse the lines
 			tac |
 			# only get the first (newest) log entry per container
 			awk '!a[$1]++ { print }' |
 			# delete everything up to and including the tag
-			sed 's/^.*#WHITELIST_IPS#//' |
+			sed 's/^.*#ALLOWLIST#//' |
 			# one IP per line
 			tr ' ' '\n' |
 			sort -t . -d |
 			uniq |
 			# back to one line for nicer debug log output
 			tr '\n' ' '; } 2>&1); then
-			log_debug "No swarm whitelist ips found"
+			log_debug "No swarm allowlist ips found"
 			ALLOWED_SWARM_IPS="$OLD_ALLOWED_SWARM_IPS"
 		else
 			log_debug "Allowed Swarm IPs: $ALLOWED_SWARM_IPS"
@@ -169,8 +164,12 @@ function update_service() {
 
 function get_network_driver() {
 	if ! NETWORK_DRIVER=$(docker network inspect --format="{{ .Driver }}" "$NETWORK" 2>&1) || [[ -z "$NETWORK_DRIVER" ]]; then
-		if [[ -n "$SWARM_WORKER" ]]; then
-			log_debug "Network was not found, but this is a swarm node"
+		if grep --quiet "network $NETWORK not found" <<< "$NETWORK_DRIVER"; then
+			# this isn't strictly an error since the network doesn't have to be up
+			# when the container starts (common for swarm overlay networks if a node
+			# doesn't have a container on that network) but we still want to slow logging/polling
+			log "Network '$NETWORK' was not found."
+			SLEEP_TIME=$((SLEEP_TIME * 2))
 		else
 			log_error "Unexpected error while determining network driver: $NETWORK_DRIVER"
 		fi
@@ -181,36 +180,12 @@ function get_network_driver() {
 }
 
 function get_network_subnet() {
-	if ! SUBNET=$(docker network inspect --format="{{ range .IPAM.Config }}{{ .Subnet }}{{ end }}" "$NETWORK" 2>&1) || [[ -z "$SUBNET" ]]; then
+	if ! SUBNET=$(docker network inspect --format="{{ (index .IPAM.Config 0).Subnet }}" "$NETWORK" 2>&1) || [[ -z "$SUBNET" ]]; then
 		log_error "Unexpected error while determining network subnet: $SUBNET"
 		return 1
 	else
 		log_debug "Subnet of $NETWORK is $SUBNET"
 	fi
-}
-
-function get_whitelisted_container_ips() {
-	local CONTAINER_IDS
-	if ! CONTAINER_IDS=$(docker ps --filter "$WHITELIST_FILTER" --filter network="$NETWORK" --format="{{ .ID }}" 2>&1); then
-		log_error "Unexpected error while getting whitelist container IDs: $CONTAINER_IDS"
-		return 1
-	fi
-
-	if [[ -z "$CONTAINER_IDS" ]]; then
-		WHITELIST_IPS=""
-		log_debug "No containers matched the whitelist"
-		return 0
-	fi
-
-	log_debug "Whitelisted containers: $CONTAINER_IDS"
-
-	if ! WHITELIST_IPS=$(xargs docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" <<< "$CONTAINER_IDS" 2>&1) || [[ -z "$WHITELIST_IPS" ]]; then
-		log_error "Unexpected error while getting whitelisted container IPs: ${WHITELIST_IPS}"
-		return 1
-	fi
-
-	log_debug "Whitelisted container IPs: $WHITELIST_IPS"
-
 }
 
 function get_netns() {
@@ -228,56 +203,48 @@ function get_netns() {
 		esac
 	done
 	if [[ -z "$NETNS" ]]; then
-		if [[ -n "$SWARM_WORKER" ]]; then
-			log_debug "No container on network $NETWORK on this node, skipping"
-		else
-			log_error "Could not retrieve network namespace for network ID $NETWORK_ID"
-			return 1
-		fi
+		# Similar to the above, the network could be created, but if there are
+		# no containers on it, docker won't create the namespace or load balancer
+		log "No network namespace for $NETWORK (ID: $NETWORK_ID) on this node"
+		SLEEP_TIME=$((SLEEP_TIME * 2))
+		return 1
 	else
 		log_debug "Network namespace of $NETWORK (ID: $NETWORK_ID) is $NETNS"
 	fi
 }
 
 function get_local_load_balancer_ip() {
-	if ! LOCAL_LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address  }}" | awk -F/ '{ print $1 }') || { [ -z "$LOCAL_LOAD_BALANCER_IP" ] && [[ -z "$SWARM_WORKER" ]]; }; then
+	# TODO: failing on empty IPs assumes that if the network namespace exists, the load balancer does.
+	#       we should verify that
+	if ! LOCAL_LOAD_BALANCER_IP=$(docker network inspect "$NETWORK" --format "{{ (index .Containers \"lb-$NETWORK\").IPv4Address }}" | awk -F/ '{ print $1 }') || [[ -z "$LOCAL_LOAD_BALANCER_IP" ]] }; then
 		log_error "Could not retrieve load balancer IP for network $NETWORK"
 		return 1
 	fi
 
-	if [[ -z "$LOCAL_LOAD_BALANCER_IP" ]] && [[ -n "$SWARM_WORKER" ]]; then
-		log_debug "No load balancer found on this node"
-	else
-		log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
-	fi
+	log_debug "Load balancer IP of $NETWORK is $LOCAL_LOAD_BALANCER_IP"
 }
 
 function iptables_tj() {
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		nsenter --net="$NETNS" -- "$IPTABLES_CMD" "$@"
+		nsenter --net="$NETNS" -- iptables-nft "$@"
 	else
-		$IPTABLES_CMD "$@"
+		iptables-nft "$@"
 	fi
 }
 
-function add_chain() {
+function add_chains() {
+	# TRAFFICJAM chain
 	local RESULT
 	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >&/dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM 2>&1); then
-			if [[ -z "$SWARM_WORKER" ]]; then
-				log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
-				return 1
-			else
-				# Ugly workaround for nsenter: setns(): can't reassociate to namespace: Invalid argument
-				log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT."
-				log_error "killing container to get access to the new network namespace (ugly workaround)"
-				kill 1
-			fi
+			log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
+			return 1
 		else
 			log "Added chain: TRAFFICJAM"
 		fi
 	fi
 
+	# jump to TRAFFICJAM chain
 	local CHAIN
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 		CHAIN="FORWARD"
@@ -293,20 +260,8 @@ function add_chain() {
 			log "Added rule: --table filter --insert $CHAIN --jump TRAFFICJAM"
 		fi
 	fi
-}
 
-function block_subnet_traffic() {
-	local RESULT
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-		log_error "Unexpected error while setting subnet blocking rule: $RESULT"
-		return 1
-	else
-		log "Added rule: --table filter --insert TRAFFICJAM --source $SUBNET --destination $SUBNET --jump DROP"
-	fi
-}
-
-function add_input_chain() {
-	local RESULT
+	# TRAFFICJAM_INPUT chain
 	if ! iptables_tj --table filter --numeric --list TRAFFICJAM_INPUT >&/dev/null; then
 		if ! RESULT=$(iptables_tj --new TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding chain TRAFFICJAM_INPUT: $RESULT"
@@ -315,6 +270,8 @@ function add_input_chain() {
 			log "Added chain: TRAFFICJAM_INPUT"
 		fi
 	fi
+
+	# jump to TRAFFICJAM_INPUT chain
 	if ! iptables_tj --table filter --numeric --list INPUT | grep "TRAFFICJAM_INPUT" >&/dev/null; then
 		if ! RESULT=$(iptables_tj --table filter --insert INPUT --jump TRAFFICJAM_INPUT); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
@@ -325,94 +282,160 @@ function add_input_chain() {
 	fi
 }
 
-function block_host_traffic() {
+function apply_rule() {
 	local RESULT
-	#Drop local socket-bound packets coming from the target subnet
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-		log_error "Unexpected error while setting host blocking rules: $RESULT"
+	if ! RESULT=$(iptables_tj "$@" --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+		log_error "Unexpected error while setting rule ($*): $RESULT"
 		return 1
 	else
-		log "Added rule: --table filter --insert TRAFFICJAM_INPUT --source $SUBNET --jump DROP"
-	fi
-
-	#But allow them if the connection was initiated by the host
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-		log_error "Unexpected error while setting host blocking rules: $RESULT"
-		return 1
-	else
-		log "Added rule: --table filter --insert TRAFFICJAM_INPUT --source $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
+		log "Added rule: $*"
 	fi
 }
 
-function report_local_whitelist_ips() {
-	log "#WHITELIST_IPS#$WHITELIST_IPS $LOCAL_LOAD_BALANCER_IP"
+function block_network_traffic() {
+	apply_rule --table filter --insert TRAFFICJAM --source "$SUBNET" --jump DROP || return 1
+	apply_rule --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --jump DROP || return 1
+}
+
+function allow_response_traffic() {
+	apply_rule --table filter --insert TRAFFICJAM --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN || return 1
+	apply_rule --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN || return 1
+}
+
+function get_container_ips_from_filter() {
+	local -n IPS="$1"
+	local FILTER="$2"
+	local CONTAINER_IDS
+	if ! CONTAINER_IDS=$(docker ps --filter "$FILTER" --filter network="$NETWORK" --format="{{ .ID }}" 2>&1); then
+		log_error "Unexpected error while getting container IDs from filter: $CONTAINER_IDS"
+		return 1
+	fi
+
+	if [[ -z "$CONTAINER_IDS" ]]; then
+		IPS=""
+		log_debug "No containers matched the fillter"
+		return 0
+	fi
+
+	log_debug "Filtered container IDs: $CONTAINER_IDS"
+
+	if ! IPS=$(xargs docker inspect --format="{{ (index .NetworkSettings.Networks \"$NETWORK\").IPAddress }}" <<< "$CONTAINER_IDS" 2>&1) || [[ -z "$ALLOWED_IPS" ]]; then
+		log_error "Unexpected error while getting container IPs: ${IPS}"
+		return 1
+	fi
+
+	log_debug "Filtered container IPs: $IPS"
+}
+
+function get_allowlist_ips() {
+	NAME="$1"
+	SOURCE_OR_DESTINATION="$2"
+	local -n IPS="$3"
+	local -n DEFINITION="ALLOWLIST_${NAME}_${SOURCE_OR_DESTINATION}"
+	shift 3
+	if [[ "$DEFINITION" =~ ^(([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})? ?)+$ ]]; then
+		IPS="$DEFINITION"
+		return
+	elif [[ "$DEFINITION" == "SUBNET" ]]; then
+		IPS="$SUBNET"
+	else
+		get_container_ips_from_filter IPS "$DEFINITION"
+	fi
+}
+
+function rules_need_updating() {
+	if [[ "$SUBNET" != "$OLD_SUBNET" ]]; then
+		return 0
+	fi
+
+	# shellcheck disable=SC2153
+	for ALLOWLIST in $ALLOWLISTS; do
+		log_debug "Checking allowlist '$ALLOWLIST' for updates"
+
+		local SOURCE_IPS
+		get_allowlist_ips "$ALLOWLIST" SOURCE SOURCE_IPS
+		local -n OLD_SOURCE_IPS="ALLOWLIST_${ALLOWLIST}_OLD_SOURCE_IPS"
+		if [[ "$SOURCE_IPS" != "$OLD_SOURCE_IPS" ]]; then
+			return 0
+		fi
+
+		local DESTINATION_IPS
+		get_allowlist_ips "$ALLOWLIST" DESTINATION DESTINATION_IPS
+		local -n OLD_DESTINATION_IPS="ALLOWLIST_${ALLOWLIST}_OLD_DESTINATION_IPS"
+		if [[ "$DESTINATION_IPS" != "$OLD_DESTINATION_IPS" ]]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+function process() {
+	local ALLOWLIST="$1"
+	log_debug "Processing allowlist '$ALLOWLIST'"
+
+	local -n SOURCE_IPS="ALLOWLIST_{$ALLOWLIST}_SOURCE_IPS"
+	get_allowlist_ips "$ALLOWLIST" SOURCE SOURCE_IPS
+
+	local -n DESTINATION_IPS="ALLOWLIST_{$ALLOWLIST}_DESTINATION_IPS"
+	get_allowlist_ips "$ALLOWLIST" DESTINATION DESTINATION_IPS
+
+	local -n CHAIN="ALLOWLIST_{$ALLOWLIST}_CHAIN"
+	local -n INVERT="ALLOWLIST_{$ALLOWLIST}_INVERT"
+
+	for SOURCE_IP in $SOURCE_IPS; do
+		for DESTINATION_IP in $DESTINATION_IPS; do
+			apply_rule --table filter --insert "${CHAIN:-TRAFFICJAM}" --source "$SOURCE_IP" "${INVERT:+!}" --destination "$DESTINATION_IP" --jump RETURN || return 1
+		done
+	done
+}
+
+function report_local_allowlist_ips() {
+	log "#ALLOWLIST_IPS#$LOCAL_ALLOWED_IPS $LOCAL_LOAD_BALANCER_IP"
 }
 
 function allow_local_load_balancer_traffic() {
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$LOCAL_LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-		log_error "Unexpected error while setting load balancer allow rule: $RESULT"
-		return 1
-	else
-		log "Added rule: --table filter --insert TRAFFICJAM --source $LOCAL_LOAD_BALANCER_IP --destination $SUBNET --jump RETURN"
-	fi
+	apply_rule --table filter --insert TRAFFICJAM --source "$LOCAL_LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN || return 1
 }
 
-function allow_swarm_whitelist_traffic() {
+function allow_swarm_traffic() {
 	if [[ -n "$ALLOWED_SWARM_IPS" ]]; then
 		for IP in $ALLOWED_SWARM_IPS; do
-			if ! grep -q "$IP" <<< "$WHITELIST_IPS" && ! grep -q "$IP" <<< "$LOCAL_LOAD_BALANCER_IP"; then
-				if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-					log_error "Unexpected error while setting allow swarm whitelist rule: $RESULT"
-					return 1
-				else
-					log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
-				fi
+			if ! grep -q "$IP" <<< "$LOCAL_ALLOWED_IPS" && ! grep -q "$IP" <<< "$LOCAL_LOAD_BALANCER_IP"; then
+				apply_rule --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN
 			else
-				log_debug "$IP is local; skipping in swarm whitelist rules"
+				log_debug "$IP is local; skipping in swarm rules"
 			fi
 		done
 	fi
 }
 
-function allow_local_whitelist_traffic() {
-	local IP
-	local RESULT
-	for IP in $WHITELIST_IPS; do
-		if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-			log_error "Unexpected error while setting whitelist allow rule: $RESULT"
-			return 1
-		else
-			log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
-		fi
-	done
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
-		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
-		return 1
-	else
-		log "Added rule: --table filter --insert TRAFFICJAM --source $SUBNET --destination $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
-	fi
-}
-
-function remove_old_rules() {
+function remove_old_rules_from_chain() {
+	local CHAIN="$1"
 	local RULENUMS
 	local RESULT
 	local RULES
 
-	if ! RULES=$(iptables_tj --line-numbers --table filter --numeric --list "$1" 2>&1); then
-		log_error "Could not get rules from chain '$1' for removal: $RULES"
+	if ! RULES=$(iptables_tj --line-numbers --table filter --numeric --list "$CHAIN" 2>&1); then
+		log_error "Could not get rules from chain '$CHAIN' for removal: $RULES"
 		return 1
 	fi
-	#Make sure to reverse sort rule numbers othwerise the numbers change!
+	# Make sure to reverse sort rule numbers othwerise the numbers change!
 	if ! RULENUMS=$(echo "$RULES" | grep "trafficjam_$INSTANCE_ID" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
-		log "No old rules to remove from chain '$1'"
+		log "No old rules to remove from chain '$CHAIN'"
 	else
 		for RULENUM in $RULENUMS; do
-			RULE=$(iptables_tj --table filter --numeric --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
-			if ! RESULT=$(iptables_tj --table filter --delete "$1" "$RULENUM" 2>&1); then
-				log_error "Could not remove $1 rule \"$RULE\": $RESULT"
+			RULE=$(iptables_tj --table filter --numeric --list "$CHAIN" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
+			if ! RESULT=$(iptables_tj --table filter --delete "$CHAIN" "$RULENUM" 2>&1); then
+				log_error "Could not remove $CHAIN rule \"$RULE\": $RESULT"
 			else
-				log "Removed $1 rule: $RULE"
+				log "Removed $CHAIN rule: $RULE"
 			fi
 		done
 	fi
+}
+
+function remove_old_rules() {
+	remove_old_rules_from_chain TRAFFICJAM
+	remove_old_rules_from_chain TRAFFICJAM_INPUT
 }
