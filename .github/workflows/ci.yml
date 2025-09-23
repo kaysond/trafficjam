@@ -41,6 +41,9 @@ jobs:
         run: |
           sudo git clone --depth 1 --branch v1.8.0 https://github.com/bats-core/bats-core.git /opt/bats
           sudo /opt/bats/install.sh /usr/local
+
+      - name: Enable br_netfilter kernel module
+        run: sudo modprobe br_netfilter
           
       - name: Run test suite
         run: bats test/test.bats

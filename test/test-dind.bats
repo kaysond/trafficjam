@@ -4,6 +4,35 @@ setup_file() {
 		exit 1
 	fi
 	docker compose -f /opt/trafficjam/test/docker-compose-dind.yml up -d
+	#Wait up to 3min for docker to reach desired state 
+	READY=""
+	i=0
+	LIMIT=36
+	while [[ -z "$READY" ]]; do
+		sleep 5
+		READY="true"
+		ERRORS=()
+
+		local RESULT
+		RESULT="$(docker ps -a --filter 'status=exited' --format '{{.Names}}')"
+		if [[ -n "$RESULT" ]]; then
+			echo "Containers have exited: $RESULT"
+			xargs docker logs <<< "$RESULT" >&2
+			exit 1
+		fi
+
+		if [[ "$(docker ps 2> /dev/null | wc -l)" != "6" ]]; then
+			READY=""
+			ERRORS=("${ERRORS[@]}" "Containers aren't started" "$(docker ps)")
+		fi
+
+		if (( ++i >= LIMIT )); then
+			echo "Timed out waiting for docker state to converge" >&2
+			printf "%s\n" "${ERRORS[@]}" >&2
+			exit 1
+		fi
+	done
+
 	docker exec traefik apk add --no-cache curl
 }
 

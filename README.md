@@ -26,6 +26,9 @@ TrafficJam allows you to safely and easily connect all of your backend container
 ## How TrafficJam Works
 TrafficJam works by adding some firewall (`iptables`) rules to the docker network you specify. First, it blocks all traffic on the network. Then it adds a rule that only allows traffic to/from the container(s) you specify in the whitelist. It continually monitors the docker network to make sure the rules stay up to date as you add or remove containers.
 
+## Dependencies
+trafficjam requires the `br_netfilter` kernel module to filter traffic on docker networks. If the module is not loaded, trafficjam will attempt to load it automatically. In some cases, it cannot be loaded automatically (e.g. rootless docker), and must be loaded manually, such as by adding "br_netfilter" to /etc/modules.
+
 ## Setup Examples
 
 ### Vanilla Docker
