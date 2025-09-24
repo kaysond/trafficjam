@@ -54,6 +54,8 @@ if [[ "${1:-}" == "--clear" ]]; then
 	clear_rules
 fi
 
+detect_br_netfilter || exit 1
+
 if [[ -n "$SWARM_DAEMON" ]]; then
 	remove_service
 

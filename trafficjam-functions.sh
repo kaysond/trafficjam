@@ -44,6 +44,16 @@ function detect_iptables_version() {
 	fi
 }
 
+function detect_br_netfilter() {
+	if lsmod | grep -q br_netfilter; then
+		log_debug "br_netfilter already loaded"
+		return 0
+	fi
+
+	log_error "br_netfilter is required by trafficjam and could not be detected. (See https://github.com/kaysond/trafficjam/#dependencies)"
+
+}
+
 function clear_rules() {
 	if [[ -z "${NETWORK_DRIVER:-}" ]]; then
 		get_network_driver || NETWORK_DRIVER=local
