@@ -105,7 +105,7 @@ function deploy_service() {
 			docker service create \
 				--quiet \
 				--detach \
-				--name "TJ_$INSTANCE_ID" \
+				--name "trafficjam_$INSTANCE_ID" \
 				--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
 				--mount type=bind,source=/var/run/docker/netns,destination=/var/run/netns,bind-propagation=rslave \
 				--env TZ="$TZ" \
@@ -128,7 +128,7 @@ function deploy_service() {
 			#docker service create may print warnings to stderr even if it succeeds
 			#particularly due to the trafficjam image not being accessible in a registry during CI
 			SERVICE_ID=$(printf '%s' "$SERVICE_ID" | tail -n1)
-			log "Created service TJ_$INSTANCE_ID: $SERVICE_ID"
+			log "Created service trafficjam_$INSTANCE_ID: $SERVICE_ID"
 		fi
 	else
 		log_debug "Existing service found, not deploying"
