@@ -418,27 +418,3 @@ function allow_local_whitelist_traffic() {
 		log "Added rule: --table filter --insert TJ_$INSTANCE_ID --source $SUBNET --destination $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
 	fi
 }
-
-function remove_old_rules() {
-	local RULENUMS
-	local RESULT
-	local RULES
-
-	if ! RULES=$(iptables_tj --line-numbers --table filter --numeric --list "$1" 2>&1); then
-		log_error "Could not get rules from chain '$1' for removal: $RULES"
-		return 1
-	fi
-	#Make sure to reverse sort rule numbers othwerise the numbers change!
-	if ! RULENUMS=$(echo "$RULES" | grep "TJ_$INSTANCE_ID" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
-		log "No old rules to remove from chain '$1'"
-	else
-		for RULENUM in $RULENUMS; do
-			RULE=$(iptables_tj --table filter --numeric --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
-			if ! RESULT=$(iptables_tj --table filter --delete "$1" "$RULENUM" 2>&1); then
-				log_error "Could not remove $1 rule \"$RULE\": $RESULT"
-			else
-				log "Removed $1 rule: $RULE"
-			fi
-		done
-	fi
-}

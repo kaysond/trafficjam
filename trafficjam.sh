@@ -131,12 +131,6 @@ else
 
 			allow_local_whitelist_traffic || continue
 
-			remove_old_rules "TJ_$INSTANCE_ID" || continue
-
-			if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
-				remove_old_rules "TJ_INPUT_$INSTANCE_ID" || continue
-			fi
-
 			OLD_SUBNET="$SUBNET"
 			OLD_WHITELIST_IPS="$WHITELIST_IPS"
 			OLD_LOCAL_LOAD_BALANCER_IP="$LOCAL_LOAD_BALANCER_IP"
