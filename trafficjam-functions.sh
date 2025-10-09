@@ -55,18 +55,32 @@ function detect_br_netfilter() {
 }
 
 function clear_rules() {
+	local TJ_CHAIN="TRAFFICJAM_$INSTANCE_ID"
+	local TJ_INPUT_CHAIN="TRAFFICJAM_INPUT_$INSTANCE_ID"
+	local PARENT_CHAIN
+
 	if [[ -z "${NETWORK_DRIVER:-}" ]]; then
 		get_network_driver || NETWORK_DRIVER=local
 	fi
 
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
 		get_netns
+		PARENT_CHAIN="FORWARD"
+	else
+		PARENT_CHAIN="DOCKER-USER"
 	fi
 
-	DATE=$(date "+%Y-%m-%d %H:%M:%S")
-	remove_old_rules TRAFFICJAM || true #this would normally fail if no rules exist but we don't want to exit
-	remove_old_rules TRAFFICJAM_INPUT || true
+	# Remove jump rules if they exist
+	iptables_tj --table filter --delete "$PARENT_CHAIN" --jump "$TJ_CHAIN" 2>/dev/null || true
+	iptables_tj --table filter --delete INPUT --jump "$TJ_INPUT_CHAIN" 2>/dev/null || true
 
+	# Flush and delete instance chains if they exist
+	iptables_tj --table filter --flush "$TJ_CHAIN" 2>/dev/null || true
+	iptables_tj --table filter --delete-chain "$TJ_CHAIN" 2>/dev/null || true
+	iptables_tj --table filter --flush "$TJ_INPUT_CHAIN" 2>/dev/null || true
+	iptables_tj --table filter --delete-chain "$TJ_INPUT_CHAIN" 2>/dev/null || true
+
+	log "Cleared rules for instance $INSTANCE_ID"
 	exit 0
 }
 
@@ -272,65 +286,67 @@ function iptables_tj() {
 
 function add_chain() {
 	local RESULT
-	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >&/dev/null; then
-		if ! RESULT=$(iptables_tj --new TRAFFICJAM 2>&1); then
+	local TJ_CHAIN="TRAFFICJAM_$INSTANCE_ID"
+	if ! iptables_tj --table filter --list "$TJ_CHAIN" >&/dev/null; then
+		if ! RESULT=$(iptables_tj --new "$TJ_CHAIN" 2>&1); then
 			if [[ -z "$SWARM_WORKER" ]]; then
-				log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT"
+				log_error "Unexpected error while adding chain $TJ_CHAIN: $RESULT"
 				return 1
 			else
 				# Ugly workaround for nsenter: setns(): can't reassociate to namespace: Invalid argument
-				log_error "Unexpected error while adding chain TRAFFICJAM: $RESULT."
+				log_error "Unexpected error while adding chain $TJ_CHAIN: $RESULT."
 				log_error "killing container to get access to the new network namespace (ugly workaround)"
 				kill 1
 			fi
 		else
-			log "Added chain: TRAFFICJAM"
+			log "Added chain: $TJ_CHAIN"
 		fi
 	fi
 
-	local CHAIN
+	local PARENT_CHAIN
 	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
-		CHAIN="FORWARD"
+		PARENT_CHAIN="FORWARD"
 	else
-		CHAIN="DOCKER-USER"
+		PARENT_CHAIN="DOCKER-USER"
 	fi
 
-	if ! iptables_tj --table filter --numeric --list "$CHAIN" | grep "TRAFFICJAM" >&/dev/null; then
-		if ! RESULT=$(iptables_tj --table filter --insert "$CHAIN" --jump TRAFFICJAM 2>&1); then
+	if ! iptables_tj --table filter --check "$PARENT_CHAIN" --jump "$TJ_CHAIN" >&/dev/null; then
+		if ! RESULT=$(iptables_tj --table filter --insert "$PARENT_CHAIN" --jump "$TJ_CHAIN" 2>&1); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
 		else
-			log "Added rule: --table filter --insert $CHAIN --jump TRAFFICJAM"
+			log "Added rule: --table filter --insert $PARENT_CHAIN --jump $TJ_CHAIN"
 		fi
 	fi
 }
 
 function block_subnet_traffic() {
 	local RESULT
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_$INSTANCE_ID" --source "$SUBNET" --destination "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting subnet blocking rule: $RESULT"
 		return 1
 	else
-		log "Added rule: --table filter --insert TRAFFICJAM --source $SUBNET --destination $SUBNET --jump DROP"
+		log "Added rule: --table filter --insert TRAFFICJAM_$INSTANCE_ID --source $SUBNET --destination $SUBNET --jump DROP"
 	fi
 }
 
 function add_input_chain() {
 	local RESULT
-	if ! iptables_tj --table filter --numeric --list TRAFFICJAM_INPUT >&/dev/null; then
-		if ! RESULT=$(iptables_tj --new TRAFFICJAM_INPUT); then
-			log_error "Unexpected error while adding chain TRAFFICJAM_INPUT: $RESULT"
+	local TJ_INPUT_CHAIN="TRAFFICJAM_INPUT_$INSTANCE_ID"
+	if ! iptables_tj --table filter --numeric --list "$TJ_INPUT_CHAIN" >&/dev/null; then
+		if ! RESULT=$(iptables_tj --new "$TJ_INPUT_CHAIN"); then
+			log_error "Unexpected error while adding chain $TJ_INPUT_CHAIN: $RESULT"
 			return 1
 		else
-			log "Added chain: TRAFFICJAM_INPUT"
+			log "Added chain: $TJ_INPUT_CHAIN"
 		fi
 	fi
-	if ! iptables_tj --table filter --numeric --list INPUT | grep "TRAFFICJAM_INPUT" >&/dev/null; then
-		if ! RESULT=$(iptables_tj --table filter --insert INPUT --jump TRAFFICJAM_INPUT); then
+	if ! iptables_tj --table filter --check INPUT --jump "$TJ_INPUT_CHAIN" >&/dev/null; then
+		if ! RESULT=$(iptables_tj --table filter --insert INPUT --jump "$TJ_INPUT_CHAIN"); then
 			log_error "Unexpected error while adding jump rule: $RESULT"
 			return 1
 		else
-			log "Added rule: --table filter --insert INPUT --jump TRAFFICJAM_INPUT"
+			log "Added rule: --table filter --insert INPUT --jump $TJ_INPUT_CHAIN"
 		fi
 	fi
 }
@@ -338,19 +354,19 @@ function add_input_chain() {
 function block_host_traffic() {
 	local RESULT
 	#Drop local socket-bound packets coming from the target subnet
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_INPUT_$INSTANCE_ID" --source "$SUBNET" --jump DROP --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		return 1
 	else
-		log "Added rule: --table filter --insert TRAFFICJAM_INPUT --source $SUBNET --jump DROP"
+		log "Added rule: --table filter --insert TRAFFICJAM_INPUT_$INSTANCE_ID --source $SUBNET --jump DROP"
 	fi
 
 	#But allow them if the connection was initiated by the host
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM_INPUT --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_INPUT_$INSTANCE_ID" --source "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting host blocking rules: $RESULT"
 		return 1
 	else
-		log "Added rule: --table filter --insert TRAFFICJAM_INPUT --source $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
+		log "Added rule: --table filter --insert TRAFFICJAM_INPUT_$INSTANCE_ID --source $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
 	fi
 }
 
@@ -359,11 +375,11 @@ function report_local_whitelist_ips() {
 }
 
 function allow_local_load_balancer_traffic() {
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$LOCAL_LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_$INSTANCE_ID" --source "$LOCAL_LOAD_BALANCER_IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting load balancer allow rule: $RESULT"
 		return 1
 	else
-		log "Added rule: --table filter --insert TRAFFICJAM --source $LOCAL_LOAD_BALANCER_IP --destination $SUBNET --jump RETURN"
+		log "Added rule: --table filter --insert TRAFFICJAM_$INSTANCE_ID --source $LOCAL_LOAD_BALANCER_IP --destination $SUBNET --jump RETURN"
 	fi
 }
 
@@ -371,11 +387,11 @@ function allow_swarm_whitelist_traffic() {
 	if [[ -n "$ALLOWED_SWARM_IPS" ]]; then
 		for IP in $ALLOWED_SWARM_IPS; do
 			if ! grep -q "$IP" <<< "$WHITELIST_IPS" && ! grep -q "$IP" <<< "$LOCAL_LOAD_BALANCER_IP"; then
-				if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+				if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_$INSTANCE_ID" --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 					log_error "Unexpected error while setting allow swarm whitelist rule: $RESULT"
 					return 1
 				else
-					log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
+					log "Added rule: --table filter --insert TRAFFICJAM_$INSTANCE_ID --source $IP --destination $SUBNET --jump RETURN"
 				fi
 			else
 				log_debug "$IP is local; skipping in swarm whitelist rules"
@@ -388,18 +404,18 @@ function allow_local_whitelist_traffic() {
 	local IP
 	local RESULT
 	for IP in $WHITELIST_IPS; do
-		if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+		if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_$INSTANCE_ID" --source "$IP" --destination "$SUBNET" --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 			log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 			return 1
 		else
-			log "Added rule: --table filter --insert TRAFFICJAM --source $IP --destination $SUBNET --jump RETURN"
+			log "Added rule: --table filter --insert TRAFFICJAM_$INSTANCE_ID --source $IP --destination $SUBNET --jump RETURN"
 		fi
 	done
-	if ! RESULT=$(iptables_tj --table filter --insert TRAFFICJAM --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
+	if ! RESULT=$(iptables_tj --table filter --insert "TRAFFICJAM_$INSTANCE_ID" --source "$SUBNET" --destination "$SUBNET" --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN --match comment --comment "trafficjam_$INSTANCE_ID $DATE" 2>&1); then
 		log_error "Unexpected error while setting whitelist allow rule: $RESULT"
 		return 1
 	else
-		log "Added rule: --table filter --insert TRAFFICJAM --source $SUBNET --destination $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
+		log "Added rule: --table filter --insert TRAFFICJAM_$INSTANCE_ID --source $SUBNET --destination $SUBNET --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN"
 	fi
 }
 
