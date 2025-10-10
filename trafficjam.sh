@@ -42,8 +42,8 @@ fi
 
 # Check if "TJ_INPUT_$INSTANCE_ID" is over 28 characters long (max chain name length)
 if [[ ${#INSTANCE_ID} -gt 16 ]]; then
-		echo "Chain name would be too long, consider shortening INSTANCE_ID" >&2
-		exit 1
+	echo "Chain name would be too long, consider shortening INSTANCE_ID" >&2
+	exit 1
 fi
 
 . trafficjam-functions.sh
@@ -101,7 +101,7 @@ else
 
 		DATE=$(date "+%Y-%m-%d %H:%M:%S")
 
-		if [[
+		if [[ 
 			"$SUBNET" != "$OLD_SUBNET" ||
 			"$WHITELIST_IPS" != "$OLD_WHITELIST_IPS" ||
 			"$LOCAL_LOAD_BALANCER_IP" != "$OLD_LOCAL_LOAD_BALANCER_IP" ]] \
@@ -113,13 +113,13 @@ else
 			fi
 
 			add_chain || continue
-			iptables_tj --table filter --flush "TJ_$INSTANCE_ID" 2>/dev/null || true
+			iptables_tj --table filter --flush "TJ_$INSTANCE_ID" 2> /dev/null || true
 
 			block_subnet_traffic || continue
 
 			if [[ -z "$ALLOW_HOST_TRAFFIC" ]]; then
 				add_input_chain || continue
-				iptables_tj --table filter --flush "TJ_INPUT_$INSTANCE_ID" 2>/dev/null || true
+				iptables_tj --table filter --flush "TJ_INPUT_$INSTANCE_ID" 2> /dev/null || true
 				block_host_traffic || continue
 			fi
 

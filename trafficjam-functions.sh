@@ -71,14 +71,14 @@ function clear_rules() {
 	fi
 
 	# Remove jump rules if they exist
-	iptables_tj --table filter --delete "$PARENT_CHAIN" --jump "$TJ_CHAIN" 2>/dev/null || true
-	iptables_tj --table filter --delete INPUT --jump "$TJ_INPUT_CHAIN" 2>/dev/null || true
+	iptables_tj --table filter --delete "$PARENT_CHAIN" --jump "$TJ_CHAIN" 2> /dev/null || true
+	iptables_tj --table filter --delete INPUT --jump "$TJ_INPUT_CHAIN" 2> /dev/null || true
 
 	# Flush and delete instance chains if they exist
-	iptables_tj --table filter --flush "$TJ_CHAIN" 2>/dev/null || true
-	iptables_tj --table filter --delete-chain "$TJ_CHAIN" 2>/dev/null || true
-	iptables_tj --table filter --flush "$TJ_INPUT_CHAIN" 2>/dev/null || true
-	iptables_tj --table filter --delete-chain "$TJ_INPUT_CHAIN" 2>/dev/null || true
+	iptables_tj --table filter --flush "$TJ_CHAIN" 2> /dev/null || true
+	iptables_tj --table filter --delete-chain "$TJ_CHAIN" 2> /dev/null || true
+	iptables_tj --table filter --flush "$TJ_INPUT_CHAIN" 2> /dev/null || true
+	iptables_tj --table filter --delete-chain "$TJ_INPUT_CHAIN" 2> /dev/null || true
 
 	log "Cleared rules for instance $INSTANCE_ID"
 	exit 0
