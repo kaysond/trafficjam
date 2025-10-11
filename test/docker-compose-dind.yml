@@ -1,49 +1,26 @@
 ---
 services:
-  trafficjam_A:
-    container_name: trafficjam_A
-    image: tj
+  trafficjam:
+    container_name: trafficjam
+    image: trafficjam
+    build: /opt/trafficjam
     network_mode: host
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       TZ: America/Los_Angeles
       POLL_INTERVAL: 1
-      NETWORK: test_publicA
+      NETWORK: test_public
       WHITELIST_FILTER: ancestor=traefik:v3.3.3
       DEBUG: "true"
-      INSTANCE_ID: "instanceA"
     cap_add:
       - NET_ADMIN
 
-  trafficjam_B:
-    container_name: trafficjam_B
-    image: tj
-    network_mode: host
-    volumes:
-     - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      TZ: America/Los_Angeles
-      POLL_INTERVAL: 1
-      NETWORK: test_publicB
-      WHITELIST_FILTER: ancestor=traefik:v3.3.3
-      DEBUG: "true"
-      INSTANCE_ID: "instanceB"
-    cap_add:
-      - NET_ADMIN
-
-  reverseproxyA:
-    container_name: traefikA
-    image: traefik:v3.3.3
-    networks:
-      publicA:
-      private:
-
-  reverseproxyB:
+  reverseproxy:
     container_name: traefik
     image: traefik:v3.3.3
     networks:
-      publicB:
+      public:
       private:
 
   private1:
@@ -62,8 +39,7 @@ services:
     ports:
       - "8001:8000"
     networks:
-      publicA:
-      publicB:
+      public:
 
   public2:
     container_name: public2
@@ -72,19 +48,14 @@ services:
     ports:
       - "8002:8000"
     networks:
-      publicA:
-      publicB:
+      public:
 
 networks:
-  publicA:
+  public:
     ipam:
       config:
         - subnet: "172.23.0.0/24"
-  publicB:
-    ipam:
-      config:
-        - subnet: "172.23.1.0/24"
   private:
     ipam:
       config:
-        - subnet: "172.23.2.0/24"
+        - subnet: "172.23.1.0/24"
