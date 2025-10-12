@@ -118,6 +118,7 @@ setup_file() {
 		--volume "/var/run/docker.sock:/var/run/docker.sock" \
 		--cap-add NET_ADMIN \
 		--network host \
+		--env NETWORK=test_public \
 		trafficjam --clear
 	iptables --numeric --list
 	[ "$(iptables --numeric --list TRAFFICJAM | wc -l)" -eq 2 ]

@@ -270,6 +270,14 @@ function iptables_tj() {
 	fi
 }
 
+function iptables-save_tj() {
+	if [[ "$NETWORK_DRIVER" == "overlay" ]]; then
+		nsenter --net="$NETNS" -- "$IPTABLES_CMD-save" "$@"
+	else
+		"$IPTABLES_CMD-save" "$@"
+	fi
+}
+
 function add_chain() {
 	local RESULT
 	if ! iptables_tj --table filter --numeric --list TRAFFICJAM >&/dev/null; then
@@ -404,25 +412,29 @@ function allow_local_whitelist_traffic() {
 }
 
 function remove_old_rules() {
-	local RULENUMS
-	local RESULT
 	local RULES
+	local RESULT
+	local ARGUMENTS
 
-	if ! RULES=$(iptables_tj --line-numbers --table filter --numeric --list "$1" 2>&1); then
+	if ! RULES=$(iptables-save_tj --table filter | grep -- "-A $1 " | grep -- "--comment \"trafficjam_$INSTANCE_ID" | grep -v "$DATE" | sed "s/^-A $1 //g" 2>&1); then
 		log_error "Could not get rules from chain '$1' for removal: $RULES"
 		return 1
 	fi
-	#Make sure to reverse sort rule numbers othwerise the numbers change!
-	if ! RULENUMS=$(echo "$RULES" | grep "trafficjam_$INSTANCE_ID" | grep -v "$DATE" | awk '{ print $1 }' | sort -nr); then
-		log "No old rules to remove from chain '$1'"
-	else
-		for RULENUM in $RULENUMS; do
-			RULE=$(iptables_tj --table filter --numeric --list "$1" "$RULENUM" 2> /dev/null) # Suppress warnings since its just logging
-			if ! RESULT=$(iptables_tj --table filter --delete "$1" "$RULENUM" 2>&1); then
-				log_error "Could not remove $1 rule \"$RULE\": $RESULT"
-			else
-				log "Removed $1 rule: $RULE"
-			fi
-		done
-	fi
+
+	local OLD_IFS="$IFS"
+	IFS=$'\n'
+	for RULE in $RULES; do
+		# iptables needs the arguments to be passed separately, but RULE has them in one string
+		# and it's essentially impossible in bash to build an array without eval because
+		# some of the arguments have spaces in them and are quoted
+		IFS=" "
+		eval "ARGUMENTS=($RULE)"
+		if ! RESULT=$(iptables_tj --table filter --delete "$1" "${ARGUMENTS[@]}" 2>&1); then
+			log_error "Could not remove $1 rule \"$RULE\": $RESULT"
+		else
+			log "Removed $1 rule: $RULE"
+		fi
+		IFS=$'\n'
+	done
+	IFS="$OLD_IFS"
 }
