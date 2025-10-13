@@ -1,10 +1,10 @@
-FROM docker:28.0.4
+# syntax=docker/dockerfile:1.4
+FROM golang:1.21-alpine AS builder
+WORKDIR /src
+COPY . .
+RUN apk add --no-cache build-base && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -extldflags '-static'" -o /out/trafficjam ./cmd/trafficjam
 
-RUN apk add --no-cache bash iproute2 iptables tzdata
-
-COPY trafficjam.sh /usr/local/bin/trafficjam.sh
-COPY trafficjam-functions.sh /usr/local/bin/trafficjam-functions.sh
-
-HEALTHCHECK --timeout=3s CMD ps aux | grep [t]rafficjam.sh
-
-ENTRYPOINT ["/usr/local/bin/trafficjam.sh"]
+FROM scratch
+COPY --from=builder /out/trafficjam /trafficjam
+ENTRYPOINT ["/trafficjam"]
