@@ -112,7 +112,7 @@ services:
 ```
 
 ### Docker Socket Proxying
-The attack surface of trafficjam is very low because it is not exposed to any networks; it's nearly the same as running the bash scripts outside of docker. For this reason, bind mounting the docker socket does not pose a significant security concern. It is possible to use a docker socket proxy nonetheless with some special setup. First, the proxy image must have a static IP address. Second, the environment variable `DOCKER_HOST` must be set on **trafficjam** to `tcp://<proxy ip address>:2375`. For more details, see #15.
+The attack surface of trafficjam is very low because it is not exposed to any networks; it's nearly the same as running the bash scripts outside of docker. For this reason, bind mounting the docker socket does not pose a significant security concern. It is possible to use a docker socket proxy nonetheless with some special setup. First, the proxy image must have a static IP address. Second, the environment variable `DOCKER_HOST` must be set on **trafficjam** to `tcp://<proxy ip address>:2375`. For more details, see [#15](../../issues/15).
 
 **Notes:** 
 Docker Swarm services tag images with a sha256 hash to guarantee that every node runs the exact same container (since tags are mutable). When using the `ancestor` tag, ensure that the appropriate hash is included as shown in the examples.
@@ -121,15 +121,19 @@ Docker Swarm services tag images with a sha256 hash to guarantee that every node
 
 ## Configuration
 TrafficJam is configured via several environment variables:
-* **NETWORK** - The name of the Docker network this instance of TrafficJam should manage (multiple instances can be run for different networks)
-* **WHITELIST_FILTER** - A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering)
-* **TZ** - Timezone (for logging)
-* **INSTANCE_ID** - A unique alphanumeric instance ID that is required to run multiple instances of trafficjam
-* **SWARM_DAEMON** - Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service
-* **SWARM_IMAGE** - The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`)
-* **POLL_INTERVAL** - How often TrafficJam checks Docker for changes
-* **ALLOW_HOST_TRAFFIC** - Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [ARCHITECTURE.md](ARCHITECTURE.md)). Note that if this setting is enabled while old rules exist, some will not be cleared automatically and must be done so manually (See [Clearing Rules](#clearing-rules)).
-* **DEBUG** - Setting this variable turns on debug logging
+
+| Name | Description | Default | Required |
+| ---- | ----------- | ------- | :------: |
+| `NETWORK` | The name of the Docker network this instance of TrafficJam should manage (multiple instances can be run for different networks). | - | ✓ |
+| `WHITELIST_FILTER` | A Docker `--filter` parameter that designates which containers should be permitted to openly access the network. See [Docker Docs - filtering](https://docs.docker.com/engine/reference/commandline/ps/#filtering). | - | ✓ |
+| `TZ` | Timezone (for logging). | `Etc/UTC` | - |
+| `INSTANCE_ID` | A unique alphanumeric instance ID that is required to run multiple instances of trafficjam. | - | - |
+| `SWARM_DAEMON` | Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service. | - | - |
+| `SWARM_IMAGE` | The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`). | `kaysond/trafficjam` | - |
+| `POLL_INTERVAL` | How often TrafficJam checks Docker for changes, in seconds. | `5` | - |
+| `ALLOW_HOST_TRAFFIC` | Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [ARCHITECTURE.md](ARCHITECTURE.md)). Note that if this setting is enabled while old rules exist, some will not be cleared automatically and must be done so manually (See [Clearing Rules](#clearing-rules)). | - | - |
+| `DEBUG` | Setting this variable turns on debug logging. | - | - |
+| `DOCKER_HOST` | If you want to use a docker socket proxy, you'll have to provide this environment variable with the following syntax `tcp://<proxy ip address>:2375`. For more info, see [Docker Socket Proxying](#docker-socket-proxying). | - | - |
 
 ## Dependencies
 * Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.10`)
