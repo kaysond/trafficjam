@@ -129,11 +129,13 @@ TrafficJam is configured via several environment variables:
 | `TZ` | Timezone (for logging). | `Etc/UTC` | - |
 | `INSTANCE_ID` | A unique alphanumeric instance ID that is required to run multiple instances of trafficjam. | - | - |
 | `SWARM_DAEMON` | Setting this variable is required for swarm and activates a daemon that determines network load balancer IP addresses and properly configures the trafficjam service. | - | - |
-| `SWARM_IMAGE` | The image the trafficjam swarm daemon should deploy (defaults to `kaysond/trafficjam`). The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`). | `kaysond/trafficjam` | - |
+| `SWARM_IMAGE` | The image the trafficjam swarm daemon should deploy. The best practice is to pin this to a particular image hash (e.g. `kaysond/trafficjam:v1.0.0@sha256:8d41...`<sup>1</sup>). | `kaysond/trafficjam` | - |
 | `POLL_INTERVAL` | How often TrafficJam checks Docker for changes, in seconds. | `5` | - |
 | `ALLOW_HOST_TRAFFIC` | Allow containers to initiate communication with the docker host, and thus any port-mapped containers. Most users do not need this setting enabled. (See [ARCHITECTURE.md](ARCHITECTURE.md)). Note that if this setting is enabled while old rules exist, some will not be cleared automatically and must be done so manually (See [Clearing Rules](#clearing-rules)). | - | - |
 | `DEBUG` | Setting this variable turns on debug logging. | - | - |
 | `DOCKER_HOST` | If you want to use a docker socket proxy, you'll have to provide this environment variable with the following syntax `tcp://<proxy ip address>:2375`. For more info, see [Docker Socket Proxying](#docker-socket-proxying). | - | - |
+
+1. `kaysond/trafficjam:v1.0.0@sha256:8d41599fa564e058f7eb396016e229402730841fa43994124a8fb3a14f1a9122`
 
 ## Dependencies
 * Linux with iptables whose version is compatible with the iptables in TrafficJam (currently `1.8.10`)
