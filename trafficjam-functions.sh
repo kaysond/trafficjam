@@ -51,7 +51,7 @@ function detect_br_netfilter() {
 	fi
 
 	log_error "br_netfilter is required by trafficjam and could not be detected. (See https://github.com/kaysond/trafficjam/#dependencies)"
-
+	return 1
 }
 
 function clear_rules() {
