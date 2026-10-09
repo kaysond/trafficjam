@@ -45,7 +45,7 @@ function detect_iptables_version() {
 }
 
 function detect_br_netfilter() {
-	if lsmod | grep -q br_netfilter; then
+	if [ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]; then
 		log_debug "br_netfilter already loaded"
 		return 0
 	fi
